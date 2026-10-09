@@ -61,7 +61,13 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.45fr) min
 .syncbar{display:flex;flex-direction:column;gap:10px;padding:12px 14px;border:1px solid var(--now);border-radius:10px;background:var(--now-soft)}
 .syncbar p{margin:0;font-size:.88rem}
 .syncbar .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-#tapBtn{flex:1 1 200px;min-height:56px;font-size:1.1rem;border-radius:12px}
+#tapBtn{flex:1 1 110px;min-height:56px;font-size:1.1rem;border-radius:12px}
+.modes .btn{flex:1 1 auto;padding:5px 8px;font-size:.85rem}
+.modes .btn[aria-pressed="true"]{background:var(--now);border-color:var(--now);color:var(--on-now);font-weight:700}
+#syncMsg{font-size:.8rem;color:var(--muted)}
+#syncMsg:empty{display:none}
+.syncbar details{margin:0}
+.syncbar details .row{margin-top:8px}
 
 .lyr{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--line)}
 .ltool{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 16px;border-bottom:1px solid var(--line)}
@@ -155,6 +161,7 @@ body.compact .row-l.next .tr{display:none}
   .syncbar{padding:10px 12px;gap:8px}
   .syncbar p{font-size:.8rem}
   #tapBtn{min-height:52px}
+  .syncbar .row .btn:not(#tapBtn){padding:6px 8px;font-size:.85rem}
   .fields{grid-template-columns:minmax(0,1fr)}
 }
 @media (prefers-reduced-motion:reduce){.row-l{transition:none}}
@@ -200,19 +207,28 @@ body.compact .row-l.next .tr{display:none}
       </div>
     </div>
     <div class="syncbar" id="syncbar" hidden>
-      <p><b>タイミング合わせ中。</b>点線の行の歌い出しで、下のボタンかスペースキーを押します。行をタップするとそこから録り直せます。</p>
+      <div class="row modes" role="group" aria-label="合わせ方">
+        <button class="btn" id="mAnchor" type="button" aria-pressed="false">まとめてずらす</button>
+        <button class="btn" id="mGroup" type="button" aria-pressed="false">区切りごと</button>
+        <button class="btn" id="mLine" type="button" aria-pressed="false">1行ずつ</button>
+      </div>
+      <p id="syncTx"></p>
       <div class="row">
-        <button class="btn primary" id="tapBtn" type="button">ここ！（次の行へ）</button>
+        <button class="btn" id="sBack" type="button">5秒戻る</button>
+        <button class="btn primary" id="tapBtn" type="button" title="スペースキーでも押せます">ここ！</button>
         <button class="btn" id="undoBtn" type="button">ひとつ戻す</button>
         <button class="btn" id="syncEnd" type="button">終わる</button>
       </div>
-      <div class="row">
-        <span class="lbl">全体のずれ</span>
-        <button class="btn" id="offM" type="button">歌詞を0.1秒早く</button>
-        <button class="btn" id="offP" type="button">歌詞を0.1秒遅く</button>
-        <span class="sp" style="flex:1"></span>
-        <button class="btn danger" id="clrT" type="button">全部消す</button>
-      </div>
+      <p id="syncMsg" role="status"></p>
+      <details class="fine">
+        <summary>微調整</summary>
+        <div class="row">
+          <button class="btn" id="offM" type="button">歌詞を0.1秒早く</button>
+          <button class="btn" id="offP" type="button">歌詞を0.1秒遅く</button>
+          <span style="flex:1"></span>
+          <button class="btn danger" id="clrT" type="button">全部消す</button>
+        </div>
+      </details>
     </div>
   </section>
 
@@ -413,6 +429,12 @@ function renderPicker() {
 function renderList() {
   const box = $('list'); box.innerHTML = ''; activeLi = -1; shownCursor = -1; shownNext = -1;
   lines = blocks.filter(b => b.type === 'line');
+  groups = []; let grp = null, gi = 0; // 空行や見出しで区切られたまとまり
+  blocks.forEach(b => {
+    if (b.type !== 'line') { grp = null; return; }
+    if (!grp) { grp = { start: gi, end: gi }; groups.push(grp); }
+    grp.end = gi; b.g = groups.length - 1; b.w = weight(b.text); gi++;
+  });
   if (!cur) { box.innerHTML = '<p class="hint">曲を追加すると、ここに歌詞と訳が動画に合わせて流れます。</p>'; updateStat(); return; }
   if (!lines.length) { box.innerHTML = '<p class="hint">この曲にはまだ歌詞がありません。「編集」から歌詞と訳を入れてください。</p>'; updateStat(); return; }
   let n = 0;
@@ -495,38 +517,119 @@ function tick() {
 }
 setInterval(tick, 80);
 
-/* ---------- タイミング合わせ ---------- */
+/* ---------- タイミング合わせ ----------
+   anchor: 取り込んだ時刻を1回押すだけでまとめてずらす（離れた2か所で押すと速さの違いも補正）
+   group : 区切りの最初の行だけ押し、間の行は文字の量に応じて割り振る
+   line  : 1行ずつ押す */
+let mode = 'line', groups = [], gTaps = {}, gOrder = [], cursorG = 0, orig = null, anchors = [];
+const r2 = v => Math.round(v * 100) / 100;
+function weight(s) { // 歌うのにかかる長さの目安（かな=1、漢字=2、英語は母音のかたまり=1）
+  const n = re => (s.match(re) || []).length;
+  return 1.5 + n(/[぀-ヿ]/g) + n(/[一-鿿]/g) * 2 + n(/[aeiouy]+/gi);
+}
 const leadIn = i => { let p = 0; for (let k = i - 1; k >= 0; k--) if (lines[k].t != null) { p = lines[k].t; break; } return Math.max(0, p - 3); };
+const MODE_TX = {
+  anchor: '取り込んだタイミングを動画に合わせます。点線の行の歌い出しで1回押すと、全部の行がまとめてずれます。後半だけずれるときは、後ろのほうの行をタップしてからもう一度押してください。',
+  group: '区切りごとに、点線の行（区切りの最初の行）の歌い出しで押します。間の行は自動で割り振ります。',
+  line: '点線の行の歌い出しで押します。行をタップするとそこから録り直せます。'
+};
+const roughOk = () => groups.length >= 2 && lines.length / groups.length >= 2;
+function cue() { if (cursor < 0 || !lines[cursor]) return; seek(mode === 'anchor' ? Math.max(0, lines[cursor].t - 5) : leadIn(cursor)); playV(); }
+function setMode(m) {
+  mode = m; $('syncMsg').textContent = '';
+  if (m === 'anchor') { orig = lines.map(l => l.t); anchors = []; cursor = lines.findIndex(l => l.t != null); }
+  else if (m === 'group') { gTaps = {}; gOrder = []; cursorG = groups.findIndex(g => lines[g.start].t == null); if (cursorG < 0) cursorG = 0; cursor = groups[cursorG].start; }
+  else { const f = lines.findIndex(l => l.t == null); cursor = f >= 0 ? f : 0; }
+  [['mAnchor', 'anchor'], ['mGroup', 'group'], ['mLine', 'line']].forEach(([id, k]) => $(id).setAttribute('aria-pressed', String(k === m)));
+  $('mAnchor').disabled = !lines.some(l => l.t != null);
+  $('syncTx').textContent = MODE_TX[m];
+  cue();
+}
 function startSync() {
   if (!cur || !ytReady || !lines.length) return;
   sync = true; delArmed = false; $('clrT').textContent = '全部消す';
-  const first = lines.findIndex(l => l.t == null);
-  cursor = first >= 0 ? first : 0;
-  seek(leadIn(cursor)); playV(); updateStat();
+  const timed = lines.filter(l => l.t != null).length;
+  setMode(timed >= lines.length * .8 ? 'anchor' : roughOk() ? 'group' : 'line');
+  updateStat();
 }
-function endSync() { sync = false; updateStat(); }
+function endSync() { sync = false; orig = null; anchors = []; updateStat(); }
+function applyAnchors() {
+  if (!anchors.length) { lines.forEach((l, k) => { l.t = orig[k]; }); $('syncMsg').textContent = ''; return; }
+  const a1 = anchors[0], a2 = anchors[anchors.length - 1]; let s = 1, base = a2;
+  if (anchors.length > 1 && Math.abs(orig[a2.i] - orig[a1.i]) >= 15) {
+    const v = (a2.t - a1.t) / (orig[a2.i] - orig[a1.i]);
+    if (v > .7 && v < 1.4) { s = v; base = a1; }
+  }
+  lines.forEach((l, k) => { if (orig[k] != null) l.t = Math.max(0, r2(base.t + s * (orig[k] - orig[base.i]))); });
+  const d = base.t - orig[base.i];
+  $('syncMsg').textContent = '全体を' + (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(1) + '秒ずらしました' + (s !== 1 ? '（速さの違いも補正: ' + Math.round(s * 100) + '%）' : '') + '。合っていれば「終わる」を押してください。';
+}
+function spread() { // 押した区切りの中の行に時刻を割り振る。間奏で間のびしないよう、詰まっている区切りの速さを基準にする
+  const startOf = g => (g in gTaps) ? gTaps[g] : lines[groups[g].start].t;
+  const W = groups.map(g => { let s = 0; for (let i = g.start; i <= g.end; i++) s += lines[i].w; return s; });
+  const rates = [];
+  groups.forEach((g, k) => { const a = startOf(k), b = k + 1 < groups.length ? startOf(k + 1) : null; if (a != null && b != null && b > a + 1) rates.push((b - a) / W[k]); });
+  rates.sort((x, y) => x - y);
+  const ref = Math.min(.5, Math.max(.12, rates.length ? rates[Math.floor((rates.length - 1) * .3)] : .33));
+  Object.keys(gTaps).forEach(key => {
+    const k = +key, g = groups[k], a = gTaps[k], b = k + 1 < groups.length ? startOf(k + 1) : null;
+    let dur = W[k] * ref * 1.1; if (b != null && b > a + 1) dur = Math.min(dur, b - a);
+    let acc = 0; for (let i = g.start; i <= g.end; i++) { lines[i].t = r2(a + dur * acc / W[k]); acc += lines[i].w; }
+  });
+}
 function stamp() {
-  if (!sync || cursor >= lines.length) return;
-  lines[cursor].t = Math.round(nowT() * 100) / 100; cursor++;
-  persist(); paintTimes();
+  if (!sync) return;
+  const t = r2(nowT());
+  if (mode === 'anchor') {
+    if (cursor < 0 || orig[cursor] == null) return;
+    anchors = anchors.filter(a => a.i !== cursor); anchors.push({ i: cursor, t });
+    applyAnchors(); persist(); paintTimes(); return;
+  }
+  if (mode === 'group') {
+    if (cursorG >= groups.length) return;
+    gTaps[cursorG] = t; gOrder = gOrder.filter(g => g !== cursorG); gOrder.push(cursorG); cursorG++;
+    spread(); persist(); paintTimes();
+    if (cursorG >= groups.length) { endSync(); return; }
+    cursor = groups[cursorG].start; return;
+  }
+  if (cursor >= lines.length) return;
+  lines[cursor].t = t; cursor++; persist(); paintTimes();
   if (cursor >= lines.length) endSync();
 }
 function undo() {
-  if (!sync || cursor <= 0) return;
-  cursor--; lines[cursor].t = null; persist(); paintTimes(); seek(leadIn(cursor)); playV();
+  if (!sync) return;
+  if (mode === 'anchor') { if (!anchors.length) return; anchors.pop(); applyAnchors(); persist(); paintTimes(); cue(); return; }
+  if (mode === 'group') {
+    if (!gOrder.length) return;
+    const k = gOrder.pop(); delete gTaps[k];
+    for (let i = groups[k].start; i <= groups[k].end; i++) lines[i].t = null;
+    cursorG = k; cursor = groups[k].start; spread(); persist(); paintTimes(); cue(); return;
+  }
+  if (cursor <= 0) return;
+  cursor--; lines[cursor].t = null; persist(); paintTimes(); cue();
 }
 function pickLine(i) {
-  if (sync) { cursor = i; seek(leadIn(i)); playV(); return; }
-  if (lines[i].t != null) { seek(lines[i].t); playV(); }
+  if (!sync) { if (lines[i].t != null) { seek(lines[i].t); playV(); } return; }
+  if (mode === 'anchor') { if (lines[i].t == null) return; cursor = i; }
+  else if (mode === 'group') { cursorG = lines[i].g; cursor = groups[cursorG].start; }
+  else cursor = i;
+  cue();
 }
-function shiftAll(d) { lines.forEach(l => { if (l.t != null) l.t = Math.max(0, Math.round((l.t + d) * 100) / 100); }); persist(); paintTimes(); }
+function shiftAll(d) {
+  lines.forEach(l => { if (l.t != null) l.t = Math.max(0, r2(l.t + d)); });
+  if (anchors.length) anchors.forEach(a => { a.t += d; }); else if (orig) orig = orig.map(v => v == null ? v : v + d);
+  Object.keys(gTaps).forEach(k => { gTaps[k] += d; });
+  persist(); paintTimes();
+}
 let delArmed = false;
 $('syncBtn').onclick = startSync; $('syncEnd').onclick = endSync; $('tapBtn').onclick = stamp; $('undoBtn').onclick = undo;
+$('mAnchor').onclick = () => setMode('anchor'); $('mGroup').onclick = () => setMode('group'); $('mLine').onclick = () => setMode('line');
+$('sBack').onclick = () => seek(nowT() - 5);
 $('offM').onclick = () => shiftAll(-.1); $('offP').onclick = () => shiftAll(.1);
 $('clrT').onclick = () => {
   if (!delArmed) { delArmed = true; $('clrT').textContent = 'もう一度押すと全部消す'; return; }
   delArmed = false; $('clrT').textContent = '全部消す';
-  lines.forEach(l => { l.t = null; }); cursor = 0; persist(); paintTimes(); seek(0); playV();
+  lines.forEach(l => { l.t = null; }); persist(); paintTimes(); setMode(roughOk() ? 'group' : 'line');
 };
 
 /* ---------- 再生操作 ---------- */
@@ -594,7 +697,7 @@ $('findBtn').onclick = async () => {
     if (!r.ok) throw new Error('http');
     const hits = (await r.json() || []).filter(h => h && (h.plainLyrics || h.syncedLyrics)).slice(0, 8);
     if (!hits.length) { edMsg('見つかりませんでした。曲名やアーティスト名の表記を変えて試すか、歌詞を直接貼り付けてください。'); return; }
-    edMsg(hits.length + '件見つかりました。原曲と違う演奏の動画では、タイミングは使わず「歌詞だけ」を選んでください。');
+    edMsg(hits.length + '件見つかりました。原曲に合わせて弾いている動画なら「タイミングも」がおすすめです。保存後に1回押すだけで動画に合わせられます。');
     hits.forEach(h => {
       const d = document.createElement('div'); d.className = 'hit';
       d.innerHTML = '<span class="nm">' + esc(h.trackName || '') + ' / ' + esc(h.artistName || '') + '<br><small>' + esc(h.albumName || '') + ' · ' + fmt(h.duration) + (h.syncedLyrics ? ' · タイミングつき' : '') + '</small></span>';
@@ -614,7 +717,7 @@ function importLyrics(btn, label, text) {
   }
   replaceArmed = null; btn.textContent = label;
   $('edText').value = String(text).replace(/\r/g, '').trim();
-  edMsg('取り込みました。各行の下に「>」で訳を足してから保存してください。');
+  edMsg('取り込みました。必要なら各行の下に「>」で訳を足して保存し、「タイミングを合わせる」で動画に合わせてください。');
 }
 
 /* ---------- バックアップ ---------- */
