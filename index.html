@@ -64,7 +64,8 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.45fr) min
 #tapBtn{flex:1 1 110px;min-height:56px;font-size:1.1rem;border-radius:12px}
 .modes .btn{flex:1 1 auto;padding:5px 8px;font-size:.85rem}
 .modes .btn[aria-pressed="true"]{background:var(--now);border-color:var(--now);color:var(--on-now);font-weight:700}
-#syncMsg{font-size:.8rem;color:var(--muted)}
+.shift .btn{flex:1 1 auto;padding:6px 8px;font-size:.85rem}
+#syncMsg,#offTx{font-size:.8rem;color:var(--muted)}
 #syncMsg:empty{display:none}
 .syncbar details{margin:0}
 .syncbar details .row{margin-top:8px}
@@ -220,12 +221,16 @@ body.compact .row-l.next .tr{display:none}
         <button class="btn" id="syncEnd" type="button">終わる</button>
       </div>
       <p id="syncMsg" role="status"></p>
+      <div class="row shift" role="group" aria-label="歌詞全体をずらす">
+        <button class="btn" id="off1M" type="button">1秒早く</button>
+        <button class="btn" id="offM" type="button">0.1秒早く</button>
+        <button class="btn" id="offP" type="button">0.1秒遅く</button>
+        <button class="btn" id="off1P" type="button">1秒遅く</button>
+      </div>
+      <p id="offTx" role="status">上の4つのボタンで、歌詞全体が出るタイミングをずらせます。</p>
       <details class="fine">
-        <summary>微調整</summary>
+        <summary>やり直す</summary>
         <div class="row">
-          <button class="btn" id="offM" type="button">歌詞を0.1秒早く</button>
-          <button class="btn" id="offP" type="button">歌詞を0.1秒遅く</button>
-          <span style="flex:1"></span>
           <button class="btn danger" id="clrT" type="button">全部消す</button>
         </div>
       </details>
@@ -548,6 +553,7 @@ function setMode(m) {
 function startSync() {
   if (!cur || !ytReady || !lines.length) return;
   sync = true; delArmed = false; $('clrT').textContent = '全部消す';
+  shiftSum = 0; $('offTx').textContent = '上の4つのボタンで、歌詞全体が出るタイミングをずらせます。';
   const timed = lines.filter(l => l.t != null).length;
   setMode(timed >= lines.length * .8 ? 'anchor' : roughOk() ? 'group' : 'line');
   updateStat();
@@ -619,9 +625,13 @@ function shiftAll(d) {
   lines.forEach(l => { if (l.t != null) l.t = Math.max(0, r2(l.t + d)); });
   if (anchors.length) anchors.forEach(a => { a.t += d; }); else if (orig) orig = orig.map(v => v == null ? v : v + d);
   Object.keys(gTaps).forEach(k => { gTaps[k] += d; });
+  shiftSum = r2(shiftSum + d);
+  $('offTx').textContent = shiftSum === 0 ? '歌詞全体のずらしは元に戻りました。'
+    : '歌詞全体を合計 ' + Math.abs(shiftSum).toFixed(1) + '秒 ' + (shiftSum > 0 ? '遅く' : '早く') + 'しました。';
   persist(); paintTimes();
 }
-let delArmed = false;
+let delArmed = false, shiftSum = 0;
+$('off1M').onclick = () => shiftAll(-1); $('off1P').onclick = () => shiftAll(1);
 $('syncBtn').onclick = startSync; $('syncEnd').onclick = endSync; $('tapBtn').onclick = stamp; $('undoBtn').onclick = undo;
 $('mAnchor').onclick = () => setMode('anchor'); $('mGroup').onclick = () => setMode('group'); $('mLine').onclick = () => setMode('line');
 $('sBack').onclick = () => seek(nowT() - 5);
