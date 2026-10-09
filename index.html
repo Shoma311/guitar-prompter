@@ -97,8 +97,11 @@ dialog h2{margin:0 0 14px;font-size:1.15rem}
 .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
 .fields .wide{grid-column:1/-1}
 .fld{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);min-width:0}
-.fld input,#edText{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:7px 9px;color:var(--fg);min-width:0;width:100%;font-size:.95rem}
+.fld input,#edText,#trPaste{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:7px 9px;color:var(--fg);min-width:0;width:100%;font-size:.95rem}
 #edText{font-family:var(--f-mono);font-size:.84rem;line-height:1.6;min-height:32vh;resize:vertical}
+#trPaste{font-size:.88rem;line-height:1.6;min-height:16vh;resize:vertical}
+a.btn{display:inline-block;text-decoration:none}
+.note{margin:8px 0;font-size:.82rem;color:var(--muted)}
 details{margin:10px 0;font-size:.85rem}
 summary{cursor:pointer;color:var(--muted)}
 pre.fmt{margin:8px 0 0;overflow-x:auto;background:var(--sunk);border-radius:8px;padding:12px 14px;font-family:var(--f-mono);font-size:.78rem;line-height:1.7}
@@ -272,6 +275,20 @@ body.compact .row-l.next .tr{display:none}
         <button class="btn" id="findBtn" type="button">上の曲名とアーティストで探す</button>
       </div>
       <div id="found"></div>
+    </details>
+    <details id="trBox">
+      <summary>訳をまとめて入れる</summary>
+      <p class="note" id="trNote"></p>
+      <div class="acts">
+        <button class="btn" id="autoTr" type="button" hidden>このブラウザで自動で訳す</button>
+        <a class="btn" id="gtLink" target="_blank" rel="noopener" href="https://translate.google.com/?sl=en&amp;tl=ja&amp;op=translate">英語の行をGoogle翻訳で開く</a>
+      </div>
+      <label class="fld" style="margin-top:10px">訳を貼る（1行に1つ。翻訳結果をまるごとコピーしてそのまま貼れます）
+        <textarea id="trPaste" spellcheck="false"></textarea>
+      </label>
+      <div class="acts" style="margin-top:8px">
+        <button class="btn" id="trApply" type="button">貼った訳を歌詞に当てはめる</button>
+      </div>
     </details>
     <div id="edMsg" class="msg" role="status"></div>
     <div class="acts">
@@ -668,6 +685,7 @@ const edMsg = t => { $('edMsg').textContent = t || ''; };
 function openEditor(song) {
   pauseV(); if (sync) endSync();
   editing = song; edDel = false; replaceArmed = null; edMsg(''); $('found').innerHTML = ''; $('lrcBox').open = false;
+  $('trBox').open = false; $('trPaste').value = '';
   $('edHead').textContent = song ? '曲を編集' : '曲を追加';
   $('edTitle').value = song ? song.title : ''; $('edArtist').value = song ? (song.artist || '') : '';
   $('edUrl').value = song && song.vid ? 'https://www.youtube.com/watch?v=' + song.vid : '';
@@ -729,6 +747,44 @@ function importLyrics(btn, label, text) {
   $('edText').value = String(text).replace(/\r/g, '').trim();
   edMsg('取り込みました。必要なら各行の下に「>」で訳を足して保存し、「タイミングを合わせる」で動画に合わせてください。');
 }
+
+/* 訳をまとめて入れる: 英語の行だけを取り出し、訳を順番どおりに当てはめる（日本語の行には訳をつけない） */
+const needsTr = s => { const en = (s.match(/[A-Za-z]/g) || []).length, ja = (s.match(/[぀-ヿ一-鿿]/g) || []).length; return en >= 2 && en > ja; };
+function trTargets() { const b = parseText($('edText').value); return { blocks: b, targets: b.filter(x => x.type === 'line' && needsTr(x.text)) }; }
+function refreshTr() {
+  const { targets } = trTargets(), has = targets.filter(l => l.tr).length;
+  $('trNote').textContent = !targets.length ? '英語の行が見つかりません。先に上の欄へ歌詞を入れてください。'
+    : '英語の行は ' + targets.length + '行（うち訳つき ' + has + '行）。日本語の行には訳をつけません。';
+  $('gtLink').href = 'https://translate.google.com/?sl=en&tl=ja&op=translate&text=' + encodeURIComponent(targets.map(l => l.text).join('\n'));
+  $('autoTr').hidden = !('Translator' in self);
+}
+$('trBox').addEventListener('toggle', refreshTr);
+$('edText').addEventListener('input', () => { if ($('trBox').open) refreshTr(); });
+$('trApply').onclick = () => {
+  const { blocks: b, targets } = trTargets();
+  const got = $('trPaste').value.replace(/\r/g, '').split('\n').map(s => s.trim()).filter(Boolean);
+  if (!targets.length) { edMsg('英語の行が見つかりません。先に歌詞を入れてください。'); return; }
+  if (!got.length) { edMsg('訳を貼る欄が空です。翻訳結果を貼ってから押してください。'); return; }
+  if (got.length !== targets.length) { edMsg('英語の行は ' + targets.length + '行ですが、貼られた訳は ' + got.length + '行です。行数が同じになるように直してください。'); return; }
+  targets.forEach((l, i) => { l.tr = got[i]; });
+  $('edText').value = serialize(b); $('trPaste').value = ''; refreshTr();
+  edMsg(targets.length + '行に訳を入れました。内容を確認して保存してください。');
+};
+$('autoTr').onclick = async () => { // パソコン版Chromeなどに内蔵の翻訳機能（端末内で動く）。使えないブラウザではボタンを出さない
+  const { blocks: b, targets } = trTargets(), todo = targets.filter(l => !l.tr);
+  if (!todo.length) { edMsg(targets.length ? '英語の行にはすべて訳が入っています。' : '英語の行が見つかりません。先に歌詞を入れてください。'); return; }
+  $('autoTr').disabled = true; edMsg('翻訳の準備をしています…');
+  try {
+    const tr = await self.Translator.create({
+      sourceLanguage: 'en', targetLanguage: 'ja',
+      monitor(m) { m.addEventListener('downloadprogress', e => edMsg('翻訳データを取得しています… ' + Math.round((e.loaded || 0) * 100) + '%')); }
+    });
+    for (let i = 0; i < todo.length; i++) { edMsg('訳しています… ' + (i + 1) + ' / ' + todo.length); todo[i].tr = String(await tr.translate(todo[i].text)).replace(/\s*\n\s*/g, ' ').trim(); }
+    $('edText').value = serialize(b); refreshTr();
+    edMsg(todo.length + '行に訳を入れました。機械翻訳なので、内容を確認して保存してください。');
+  } catch { edMsg('このブラウザでは自動で訳せませんでした。「英語の行をGoogle翻訳で開く」から訳を貼り付けてください。'); }
+  finally { $('autoTr').disabled = false; }
+};
 
 /* ---------- バックアップ ---------- */
 $('dataBtn').onclick = () => { $('dataMsg').textContent = ''; $('data').showModal(); };
