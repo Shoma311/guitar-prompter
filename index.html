@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>弾き語りプロンプター</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#182029" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
@@ -39,7 +45,8 @@ button,select,input,textarea{font:inherit;color:inherit}
 .mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 
 .top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px;background:var(--surface);border-bottom:1px solid var(--line)}
-.brand{font-weight:700;letter-spacing:.04em;white-space:nowrap}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+.brand svg{width:26px;height:26px;flex:none}
 #songSel{flex:1 1 150px;min-width:0;max-width:360px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 .top .sp{flex:1 1 0}
 
@@ -207,7 +214,7 @@ body.sub .cmp-hint{color:var(--cap-dim)}
 <body>
 
 <header class="top">
-  <span class="brand">弾き語りプロンプター</span>
+  <span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0B111B"/><circle cx="32" cy="32" r="18.5" fill="none" stroke="#E7ECF1" stroke-width="5"/><path d="M23 23h18M23 41h18" fill="none" stroke="#E7ECF1" stroke-width="5" stroke-linecap="round"/><path d="M21 32h22" fill="none" stroke="#FF9D5C" stroke-width="5" stroke-linecap="round"/></svg>弾き語りプロンプター</span>
   <select id="songSel" aria-label="曲を選ぶ"></select>
   <span class="sp"></span>
   <button class="btn" id="editBtn" type="button">編集</button>
