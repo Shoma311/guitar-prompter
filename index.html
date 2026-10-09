@@ -112,7 +112,17 @@ dialog h2{margin:0 0 14px;font-size:1.15rem}
 .fields .wide{grid-column:1/-1}
 .fld{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);min-width:0}
 .fld input,#edText,#trPaste{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:7px 9px;color:var(--fg);min-width:0;width:100%;font-size:.95rem}
-#edText{font-family:var(--f-mono);font-size:.84rem;line-height:1.6;min-height:32vh;resize:vertical}
+#edText{font-family:var(--f-mono);font-size:.84rem;line-height:1.6;min-height:26vh;resize:vertical;margin-top:8px}
+.step{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.step h3{margin:0 0 10px;font-size:.95rem;display:flex;align-items:center;gap:8px}
+.step .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--now);color:var(--on-now);font-family:var(--f-mono);font-size:.75rem}
+.step .fields{margin-bottom:0}
+.step .note{margin:0 0 8px}
+.step .acts .note{margin:0}
+#findMsg:empty,#trMsg:empty,#edMsg:empty{display:none}
+.foot{position:sticky;bottom:-20px;margin:14px -20px -20px;padding:12px 20px;background:var(--surface);border-top:1px solid var(--line)}
+.nudge{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:10px 12px 0;padding:10px 12px;border-radius:10px;background:var(--now-soft);font-size:.85rem;text-align:left}
+.nudge>span:first-child{flex:1 1 200px;min-width:0}
 #trPaste{font-size:.88rem;line-height:1.6;min-height:16vh;resize:vertical}
 a.btn{display:inline-block;text-decoration:none}
 .note{margin:8px 0;font-size:.82rem;color:var(--muted)}
@@ -129,7 +139,6 @@ pre.fmt i{font-style:normal;color:var(--muted)}
 .acts .sp{flex:1}
 
 /* 2行表示: 動画を最大にして、歌詞は「いまの行」と「次の行」だけにする */
-.cmp-hint{display:none;margin:0;padding:8px 16px 0;font-size:.82rem;color:var(--muted);text-align:center}
 body.compact main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto minmax(0,1fr);grid-template-areas:"v" "s" "l" "t" "."}
 body.compact #split{grid-area:s;height:18px;background:transparent;border:0;cursor:row-resize}
 body.compact #split::after{width:44px;height:4px}
@@ -140,7 +149,6 @@ body.compact .transport{grid-area:t;padding:10px 16px;justify-content:center}
 body.compact .syncbar{display:none}
 body.compact .lyr{grid-area:l;border:0;background:transparent;min-height:0}
 body.compact .ltool{display:none}
-body.compact.no-timed .cmp-hint{display:block}
 body.compact #list{flex:none;overflow:hidden;padding-block:2px 0;padding-inline:16px;min-height:calc(5.8rem * var(--ls,1));gap:4px;text-align:center}
 body.compact .row-l.on .tr{font-size:calc(clamp(.85rem,.8rem + .25vw,1rem) * var(--ls,1))}
 body.compact .row-l,body.compact .head,body.compact .gap{display:none}
@@ -179,7 +187,7 @@ body.sub #list{min-height:calc(4.4rem * var(--ls,1));padding-block:8px;justify-c
 body.sub .row-l.next{display:none}
 body.sub .row-l.on .en{color:var(--cap-fg)}
 body.sub .row-l.on .tr{color:var(--cap-dim)}
-body.sub .cmp-hint{color:var(--cap-dim)}
+body.sub .nudge{background:transparent;color:var(--cap-fg);margin:4px 8px 0}
 @media (orientation:landscape){
   body.sub main{grid-template-areas:"v" "l" "s" "t"}
   body.sub .vwrap{align-items:flex-end}
@@ -292,7 +300,7 @@ body.sub .cmp-hint{color:var(--cap-dim)}
       <label><input type="checkbox" id="tgTr">訳</label>
       <span id="stat"></span>
     </div>
-    <p class="cmp-hint">タイミングを設定した行だけが流れます。表示を「歌詞: 一覧」に切り替えてから「タイミングを合わせる」で設定してください。</p>
+    <div class="nudge" id="nudge" hidden><span id="nudgeTx"></span><button class="btn primary" id="nudgeGo" type="button">タイミングを合わせる</button><button class="btn" id="nudgeOk" type="button">このままでよい</button></div>
     <div id="list"></div>
   </section>
 </main>
@@ -300,44 +308,53 @@ body.sub .cmp-hint{color:var(--cap-dim)}
 <dialog id="ed">
   <form id="edForm">
     <h2 id="edHead">曲を追加</h2>
-    <div class="fields">
-      <label class="fld">曲名<input id="edTitle" type="text" maxlength="100" autocomplete="off"></label>
-      <label class="fld">アーティスト<input id="edArtist" type="text" maxlength="100" autocomplete="off"></label>
-      <label class="fld wide">YouTubeのURL（TAB譜つき演奏動画など）<input id="edUrl" type="text" inputmode="url" autocomplete="off" placeholder="https://www.youtube.com/watch?v=…"></label>
-    </div>
-    <label class="fld">歌詞と訳
-      <textarea id="edText" spellcheck="false" placeholder="English lyric line&#10;> 次の行に「>」で日本語訳&#10;&#10;# Chorus&#10;Another line&#10;> その訳"></textarea>
-    </label>
-    <details>
-      <summary>書き方</summary>
+
+    <section class="step">
+      <h3><span class="n">1</span>曲と動画</h3>
+      <div class="fields">
+        <label class="fld">曲名<input id="edTitle" type="text" maxlength="100" autocomplete="off" enterkeyhint="search"></label>
+        <label class="fld">アーティスト<input id="edArtist" type="text" maxlength="100" autocomplete="off" enterkeyhint="search"></label>
+        <label class="fld wide">YouTubeのURL（TAB譜つき演奏動画など）<input id="edUrl" type="text" inputmode="url" autocomplete="off" placeholder="https://www.youtube.com/watch?v=…"></label>
+      </div>
+    </section>
+
+    <section class="step">
+      <h3><span class="n">2</span>歌詞</h3>
+      <div class="acts">
+        <button class="btn primary" id="findBtn" type="button">曲名で歌詞を探す</button>
+        <span class="note" id="lyrStat"></span>
+      </div>
+      <div id="findMsg" class="msg" role="status"></div>
+      <div id="found"></div>
+      <details id="lyrBox">
+        <summary>歌詞を見る・直す・自分で貼る</summary>
+        <textarea id="edText" spellcheck="false" aria-label="歌詞と訳" placeholder="English lyric line&#10;> 次の行に「>」で日本語訳&#10;&#10;# Chorus&#10;Another line&#10;> その訳"></textarea>
 <pre class="fmt">English lyric line            <i>… 歌詞は1行ずつ</i>
 &gt; 日本語の訳                   <i>… 次の行に「&gt;」で訳</i>
 # Chorus                      <i>… 「#」で見出し、空行で区切り</i>
 [00:12.30] English lyric line <i>… 行頭の時刻は自動で入る（手で直してもよい）</i></pre>
-    </details>
-    <details id="lrcBox">
-      <summary>歌詞を検索して取り込む（LRCLIB）</summary>
-      <div class="acts" style="margin-top:8px">
-        <button class="btn" id="findBtn" type="button">上の曲名とアーティストで探す</button>
-      </div>
-      <div id="found"></div>
-    </details>
-    <details id="trBox">
-      <summary>訳をまとめて入れる</summary>
+      </details>
+    </section>
+
+    <section class="step">
+      <h3><span class="n">3</span>訳</h3>
       <p class="note" id="trNote"></p>
-      <div class="acts">
-        <button class="btn" id="autoTr" type="button" hidden>このブラウザで自動で訳す</button>
-        <a class="btn" id="gtLink" target="_blank" rel="noopener" href="https://translate.google.com/?sl=en&amp;tl=ja&amp;op=translate">英語の行をGoogle翻訳で開く</a>
+      <div id="trTools" hidden>
+        <div class="acts">
+          <a class="btn primary" id="gtLink" target="_blank" rel="noopener" href="https://translate.google.com/?sl=en&amp;tl=ja&amp;op=translate">英語の行をGoogle翻訳で開く</a>
+        </div>
+        <label class="fld" style="margin-top:10px">翻訳結果をまるごとコピーして、ここに貼る（貼ると自動で歌詞に入ります）
+          <textarea id="trPaste" spellcheck="false"></textarea>
+        </label>
+        <div class="acts" style="margin-top:8px">
+          <button class="btn" id="trApply" type="button">貼った訳を歌詞に入れる</button>
+        </div>
       </div>
-      <label class="fld" style="margin-top:10px">訳を貼る（1行に1つ。翻訳結果をまるごとコピーしてそのまま貼れます）
-        <textarea id="trPaste" spellcheck="false"></textarea>
-      </label>
-      <div class="acts" style="margin-top:8px">
-        <button class="btn" id="trApply" type="button">貼った訳を歌詞に当てはめる</button>
-      </div>
-    </details>
+      <div id="trMsg" class="msg" role="status"></div>
+    </section>
+
     <div id="edMsg" class="msg" role="status"></div>
-    <div class="acts">
+    <div class="acts foot">
       <button class="btn danger" id="delBtn" type="button" hidden>削除</button>
       <span class="sp"></span>
       <button class="btn" id="cancelBtn" type="button">キャンセル</button>
@@ -478,7 +495,7 @@ function setPlayUi() {
   $('playTx').textContent = on ? '停止' : '再生';
   $('playIc').innerHTML = on ? '<rect x="5" y="4" width="5" height="16"/><rect x="14" y="4" width="5" height="16"/>' : '<polygon points="6,4 20,12 6,20"/>';
   ['playBtn', 'backBtn', 'fwdBtn', 'rate', 'aBtn', 'bBtn', 'abClr'].forEach(id => { $(id).disabled = !ytReady || !cur; });
-  $('syncBtn').disabled = !ytReady || !cur || !lines.length;
+  $('syncBtn').disabled = $('nudgeGo').disabled = !ytReady || !cur || !lines.length;
 }
 
 /* ---------- 曲の表示 ---------- */
@@ -530,7 +547,11 @@ function updateStat() {
   const un = lines.filter(l => l.t == null).length;
   $('stat').textContent = !lines.length ? '' : un ? lines.length + '行のうち ' + un + '行はタイミング未設定' : '全' + lines.length + '行のタイミング設定済み';
   $('syncBtn').hidden = sync; $('syncbar').hidden = !sync; document.body.classList.toggle('syncing', sync);
-  document.body.classList.toggle('no-timed', lines.length > 0 && !lines.some(l => l.t != null));
+  // 次にやることの案内: タイミングがまだ無い曲と、原曲のタイミングを取り込んだままの曲に出す
+  const none = lines.length > 0 && !lines.some(l => l.t != null), imp = !!(cur && cur.imp) && !none;
+  $('nudge').hidden = sync || !(none || imp); $('nudgeOk').hidden = none;
+  $('nudgeTx').textContent = none ? 'まだタイミングがありません。動画に合わせると、歌詞が流れるようになります。'
+    : '取り込んだタイミングは原曲のものです。動画とずれていたら、1回押すだけで合わせられます。';
   applyCompact();
 }
 function applyCompact() { // タイミング合わせ中は一覧が必要なので、2行表示を一時的に外す
@@ -652,7 +673,7 @@ function spread() { // 押した区切りの中の行に時刻を割り振る。
 }
 function stamp() {
   if (!sync) return;
-  const t = r2(nowT());
+  const t = r2(nowT()); if (cur.imp) cur.imp = false;
   if (mode === 'anchor') {
     if (cursor < 0 || orig[cursor] == null) return;
     anchors = anchors.filter(a => a.i !== cursor); anchors.push({ i: cursor, t });
@@ -692,13 +713,14 @@ function shiftAll(d) {
   lines.forEach(l => { if (l.t != null) l.t = Math.max(0, r2(l.t + d)); });
   if (anchors.length) anchors.forEach(a => { a.t += d; }); else if (orig) orig = orig.map(v => v == null ? v : v + d);
   Object.keys(gTaps).forEach(k => { gTaps[k] += d; });
-  shiftSum = r2(shiftSum + d);
+  shiftSum = r2(shiftSum + d); if (cur && cur.imp) cur.imp = false;
   $('offTx').textContent = shiftSum === 0 ? '歌詞全体のずらしは元に戻りました。'
     : '歌詞全体を合計 ' + Math.abs(shiftSum).toFixed(1) + '秒 ' + (shiftSum > 0 ? '遅く' : '早く') + 'しました。';
   persist(); paintTimes();
 }
 let delArmed = false, shiftSum = 0;
 $('off1M').onclick = () => shiftAll(-1); $('off1P').onclick = () => shiftAll(1);
+$('nudgeGo').onclick = startSync; $('nudgeOk').onclick = () => { if (cur) { cur.imp = false; saveSongs(); updateStat(); } };
 $('syncBtn').onclick = startSync; $('syncEnd').onclick = endSync; $('tapBtn').onclick = stamp; $('undoBtn').onclick = undo;
 $('mAnchor').onclick = () => setMode('anchor'); $('mGroup').onclick = () => setMode('group'); $('mLine').onclick = () => setMode('line');
 $('sBack').onclick = () => seek(nowT() - 5);
@@ -729,18 +751,23 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'ArrowRight') { e.preventDefault(); seek(nowT() + 5); }
 });
 
-/* ---------- 編集 ---------- */
-let editing = null, edDel = false, replaceArmed = null;
+/* ---------- 編集 ----------
+   流れ: 1 曲名と動画 → 2 歌詞を探して取り込む → 3 英語の行をGoogle翻訳で訳して貼る → 保存 */
+let editing = null, edDel = false, replaceArmed = null, importedSynced = false;
 const edMsg = t => { $('edMsg').textContent = t || ''; };
+const findMsg = t => { $('findMsg').textContent = t || ''; };
+const trMsg = t => { $('trMsg').textContent = t || ''; };
 function openEditor(song) {
   pauseV(); if (sync) endSync();
-  editing = song; edDel = false; replaceArmed = null; edMsg(''); $('found').innerHTML = ''; $('lrcBox').open = false;
-  $('trBox').open = false; $('trPaste').value = '';
+  editing = song; edDel = false; replaceArmed = null; importedSynced = false;
+  edMsg(''); findMsg(''); trMsg(''); $('found').innerHTML = ''; $('trPaste').value = '';
   $('edHead').textContent = song ? '曲を編集' : '曲を追加';
   $('edTitle').value = song ? song.title : ''; $('edArtist').value = song ? (song.artist || '') : '';
   $('edUrl').value = song && song.vid ? 'https://www.youtube.com/watch?v=' + song.vid : '';
   $('edText').value = song ? song.text : '';
+  $('lyrBox').open = !!(song && song.text.trim()); // 登録済みの曲は、歌詞をすぐ直せるよう開いておく
   $('delBtn').hidden = !song; $('delBtn').textContent = '削除';
+  refreshEd();
   $('ed').showModal();
 }
 $('edForm').addEventListener('submit', ev => {
@@ -751,6 +778,7 @@ $('edForm').addEventListener('submit', ev => {
   s.title = $('edTitle').value.trim() || '無題'; s.artist = $('edArtist').value.trim();
   if (s.vid !== vid) { s.a = s.b = null; }
   s.vid = vid; s.text = serialize(parseText($('edText').value)); s.updatedAt = Date.now();
+  if (importedSynced) s.imp = true; // 取り込んだタイミングは原曲のもの。動画に合わせるよう案内を出す
   if (!editing) songs.push(s);
   if (!saveSongs()) { edMsg('保存できませんでした。ブラウザの保存領域がいっぱいか、保存が無効になっています。'); return; }
   $('ed').close(); renderPicker(); load(s);
@@ -763,78 +791,78 @@ $('delBtn').onclick = () => {
 };
 $('editBtn').onclick = () => cur && openEditor(cur);
 $('newBtn').onclick = () => openEditor(null);
+// 入力欄でEnterを押しても保存はしない。曲名・アーティストでは歌詞の検索を始める（日本語変換の確定のEnterは除く）
+['edTitle', 'edArtist', 'edUrl'].forEach(id => $(id).addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+  e.preventDefault(); if (id !== 'edUrl') $('findBtn').click();
+}));
 
-/* 歌詞の検索（LRCLIB）: 取り込んだ行に訳はつかないので、訳は「>」の行で足す */
+/* 歌詞の検索（LRCLIB） */
 $('findBtn').onclick = async () => {
   const title = $('edTitle').value.trim(), artist = $('edArtist').value.trim(), box = $('found');
-  if (!title) { edMsg('先に曲名を入れてください。'); return; }
-  $('findBtn').disabled = true; edMsg('探しています…'); box.innerHTML = '';
+  if (!title) { findMsg('先に曲名を入れてください。'); $('edTitle').focus(); return; }
+  $('findBtn').disabled = true; findMsg('探しています…'); box.innerHTML = ''; replaceArmed = null;
   try {
     const q = new URLSearchParams({ track_name: title }); if (artist) q.set('artist_name', artist);
     const r = await fetch('https://lrclib.net/api/search?' + q.toString());
     if (!r.ok) throw new Error('http');
     const hits = (await r.json() || []).filter(h => h && (h.plainLyrics || h.syncedLyrics)).slice(0, 8);
-    if (!hits.length) { edMsg('見つかりませんでした。曲名やアーティスト名の表記を変えて試すか、歌詞を直接貼り付けてください。'); return; }
-    edMsg(hits.length + '件見つかりました。原曲に合わせて弾いている動画なら「タイミングも」がおすすめです。保存後に1回押すだけで動画に合わせられます。');
+    if (!hits.length) { findMsg('見つかりませんでした。曲名やアーティスト名の表記を変えて試すか、下の「歌詞を見る・直す・自分で貼る」から貼り付けてください。'); return; }
+    findMsg(hits.length + '件見つかりました。使うものを選んでください。');
     hits.forEach(h => {
       const d = document.createElement('div'); d.className = 'hit';
       d.innerHTML = '<span class="nm">' + esc(h.trackName || '') + ' / ' + esc(h.artistName || '') + '<br><small>' + esc(h.albumName || '') + ' · ' + fmt(h.duration) + (h.syncedLyrics ? ' · タイミングつき' : '') + '</small></span>';
-      const add = (label, text) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = label; b.onclick = () => importLyrics(b, label, text); d.appendChild(b); };
+      const add = (label, text, synced, main) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn' + (main ? ' primary' : ''); b.textContent = label; b.onclick = () => importLyrics(b, label, text, synced); d.appendChild(b); };
       const plain = h.plainLyrics || String(h.syncedLyrics).replace(/^\[[^\]]*\]\s*/gm, '');
-      add('歌詞だけ', plain); if (h.syncedLyrics) add('タイミングも', h.syncedLyrics);
+      add('この歌詞を使う', h.syncedLyrics || plain, !!h.syncedLyrics, true);
+      if (h.syncedLyrics) add('タイミングなしで使う', plain, false, false);
       box.appendChild(d);
     });
-  } catch { edMsg('歌詞の検索に失敗しました。通信状態を確認するか、歌詞を直接貼り付けてください。'); }
+  } catch { findMsg('歌詞の検索に失敗しました。通信状態を確認するか、下の「歌詞を見る・直す・自分で貼る」から貼り付けてください。'); }
   finally { $('findBtn').disabled = false; }
 };
-function importLyrics(btn, label, text) {
+function importLyrics(btn, label, text, synced) {
   if ($('edText').value.trim() && replaceArmed !== btn) {
     if (replaceArmed) replaceArmed.textContent = replaceArmed.dataset.l;
     replaceArmed = btn; btn.dataset.l = label; btn.textContent = '今の歌詞と訳を置き換える';
     return;
   }
-  replaceArmed = null; btn.textContent = label;
-  $('edText').value = String(text).replace(/\r/g, '').trim();
-  edMsg('取り込みました。必要なら各行の下に「>」で訳を足して保存し、「タイミングを合わせる」で動画に合わせてください。');
+  replaceArmed = null;
+  $('edText').value = String(text).replace(/\r/g, '').trim(); importedSynced = synced;
+  $('found').innerHTML = ''; trMsg('');
+  findMsg(synced ? '歌詞をタイミングつきで取り込みました。' : '歌詞を取り込みました。');
+  refreshEd();
 }
 
-/* 訳をまとめて入れる: 英語の行だけを取り出し、訳を順番どおりに当てはめる（日本語の行には訳をつけない） */
+/* 訳: 英語の行だけを取り出してGoogle翻訳に渡し、貼られた結果を順番どおりに当てはめる（日本語の行には訳をつけない） */
 const needsTr = s => { const en = (s.match(/[A-Za-z]/g) || []).length, ja = (s.match(/[぀-ヿ一-鿿]/g) || []).length; return en >= 2 && en > ja; };
 function trTargets() { const b = parseText($('edText').value); return { blocks: b, targets: b.filter(x => x.type === 'line' && needsTr(x.text)) }; }
-function refreshTr() {
-  const { targets } = trTargets(), has = targets.filter(l => l.tr).length;
-  $('trNote').textContent = !targets.length ? '英語の行が見つかりません。先に上の欄へ歌詞を入れてください。'
-    : '英語の行は ' + targets.length + '行（うち訳つき ' + has + '行）。日本語の行には訳をつけません。';
+function refreshEd() { // 歌詞の状態に合わせて、案内と「次に押すボタン」の強調を切り替える
+  const { blocks: b, targets } = trTargets(), ls = b.filter(x => x.type === 'line');
+  const timed = ls.filter(l => l.t != null).length, has = targets.filter(l => l.tr).length, todo = targets.length - has;
+  $('lyrStat').textContent = !ls.length ? 'まだ歌詞がありません' : '歌詞 ' + ls.length + '行' + (timed ? '（タイミングつき ' + timed + '行）' : '');
+  $('trTools').hidden = !targets.length;
+  $('trNote').textContent = !ls.length ? '歌詞を入れると、英語の行だけを訳せるようになります。'
+    : !targets.length ? '英語の行がないので、訳は不要です。'
+    : !todo ? '英語の ' + targets.length + '行すべてに訳が入っています。入れ直すときは、もう一度貼ってください。'
+    : '英語の行が ' + targets.length + '行あります' + (has ? '（訳つき ' + has + '行）' : '') + '。日本語の行には訳をつけません。';
   $('gtLink').href = 'https://translate.google.com/?sl=en&tl=ja&op=translate&text=' + encodeURIComponent(targets.map(l => l.text).join('\n'));
-  $('autoTr').hidden = !('Translator' in self);
+  $('findBtn').className = 'btn' + (ls.length ? '' : ' primary');
+  $('gtLink').className = 'btn' + (todo ? ' primary' : '');
 }
-$('trBox').addEventListener('toggle', refreshTr);
-$('edText').addEventListener('input', () => { if ($('trBox').open) refreshTr(); });
-$('trApply').onclick = () => {
+$('edText').addEventListener('input', refreshEd);
+function applyTr(fromPaste) {
   const { blocks: b, targets } = trTargets();
   const got = $('trPaste').value.replace(/\r/g, '').split('\n').map(s => s.trim()).filter(Boolean);
-  if (!targets.length) { edMsg('英語の行が見つかりません。先に歌詞を入れてください。'); return; }
-  if (!got.length) { edMsg('訳を貼る欄が空です。翻訳結果を貼ってから押してください。'); return; }
-  if (got.length !== targets.length) { edMsg('英語の行は ' + targets.length + '行ですが、貼られた訳は ' + got.length + '行です。行数が同じになるように直してください。'); return; }
+  if (!targets.length) return;
+  if (!got.length) { if (!fromPaste) trMsg('貼る欄が空です。翻訳結果を貼ってください。'); return; }
+  if (got.length !== targets.length) { trMsg('英語の行は ' + targets.length + '行ですが、貼られた訳は ' + got.length + '行です。行数が同じになるように直してから「貼った訳を歌詞に入れる」を押してください。'); return; }
   targets.forEach((l, i) => { l.tr = got[i]; });
-  $('edText').value = serialize(b); $('trPaste').value = ''; refreshTr();
-  edMsg(targets.length + '行に訳を入れました。内容を確認して保存してください。');
-};
-$('autoTr').onclick = async () => { // パソコン版Chromeなどに内蔵の翻訳機能（端末内で動く）。使えないブラウザではボタンを出さない
-  const { blocks: b, targets } = trTargets(), todo = targets.filter(l => !l.tr);
-  if (!todo.length) { edMsg(targets.length ? '英語の行にはすべて訳が入っています。' : '英語の行が見つかりません。先に歌詞を入れてください。'); return; }
-  $('autoTr').disabled = true; edMsg('翻訳の準備をしています…');
-  try {
-    const tr = await self.Translator.create({
-      sourceLanguage: 'en', targetLanguage: 'ja',
-      monitor(m) { m.addEventListener('downloadprogress', e => edMsg('翻訳データを取得しています… ' + Math.round((e.loaded || 0) * 100) + '%')); }
-    });
-    for (let i = 0; i < todo.length; i++) { edMsg('訳しています… ' + (i + 1) + ' / ' + todo.length); todo[i].tr = String(await tr.translate(todo[i].text)).replace(/\s*\n\s*/g, ' ').trim(); }
-    $('edText').value = serialize(b); refreshTr();
-    edMsg(todo.length + '行に訳を入れました。機械翻訳なので、内容を確認して保存してください。');
-  } catch { edMsg('このブラウザでは自動で訳せませんでした。「英語の行をGoogle翻訳で開く」から訳を貼り付けてください。'); }
-  finally { $('autoTr').disabled = false; }
-};
+  $('edText').value = serialize(b); $('trPaste').value = ''; refreshEd();
+  trMsg(targets.length + '行に訳を入れました。「保存」を押してください。');
+}
+$('trApply').onclick = () => applyTr(false);
+$('trPaste').addEventListener('paste', () => setTimeout(() => applyTr(true), 0)); // 貼り付けたら自動で当てはめる
 
 /* ---------- バックアップ ---------- */
 $('dataBtn').onclick = () => { $('dataMsg').textContent = ''; $('data').showModal(); };
