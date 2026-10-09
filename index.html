@@ -12,6 +12,7 @@
 :root{
   --bg:#EDF0F3; --surface:#FFFFFF; --sunk:#E1E6EB; --fg:#17212B; --muted:#5B6878; --line:#CAD2DA;
   --mark:#B8430A; --now:#1F4FBF; --now-soft:rgba(31,79,191,.09); --on-now:#FFFFFF; --danger:#B3261E;
+  --cap-bg:#0B0D10; --cap-fg:#FFFFFF; --cap-dim:#C3CAD2; /* 字幕風の帯。動画の字幕と同じく、明るい画面でも黒地に白 */
   --f-lyric:"Bricolage Grotesque","Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
   --f-ui:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
@@ -62,7 +63,7 @@ body.dragging{user-select:none;-webkit-user-select:none}
 #playBtn{width:auto;height:42px;padding:0 18px 0 14px;border-radius:21px;display:flex;gap:8px;align-items:center;font-family:var(--f-ui);font-size:1rem}
 #playBtn svg{width:16px;height:16px;fill:currentColor}
 #time{font-size:.82rem;color:var(--muted);white-space:nowrap}
-#rate{padding:6px 6px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+#rate,#viewSel{padding:6px 6px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 #loopTx{font-size:.78rem;color:var(--muted);white-space:nowrap}
 .syncbar{display:flex;flex-direction:column;gap:10px;padding:12px 14px;border:1px solid var(--now);border-radius:10px;background:var(--now-soft)}
 .syncbar p{margin:0;font-size:.88rem}
@@ -163,12 +164,30 @@ body.compact .row-l.next .tr{display:none}
   body.compact .row-l.on .tr{font-size:calc(.8rem * var(--ls,1));margin-top:0}
   body.compact .row-l.next .en{font-size:calc(.85rem * var(--ls,1))}
 }
+/* 字幕風: 動画のすぐ下に、動画と同じ幅の黒い帯で「いまの行」だけを出す（プレーヤーの上には重ねない） */
+body.sub main{grid-template-areas:"v" "l" "s" "t" "."}
+body.sub .frame{border-radius:10px 10px 0 0}
+body.sub .lyr{justify-self:center;width:var(--fw,100%);max-width:100%;background:var(--cap-bg);border-radius:0 0 10px 10px}
+body.sub #list{min-height:calc(4.4rem * var(--ls,1));padding-block:8px;justify-content:center}
+body.sub .row-l.next{display:none}
+body.sub .row-l.on .en{color:var(--cap-fg)}
+body.sub .row-l.on .tr{color:var(--cap-dim)}
+body.sub .cmp-hint{color:var(--cap-dim)}
+@media (orientation:landscape){
+  body.sub main{grid-template-areas:"v" "l" "s" "t"}
+  body.sub .vwrap{align-items:flex-end}
+}
+@media (orientation:landscape) and (max-height:520px){
+  body.sub main{grid-template-areas:"v v" "l l" "s t"}
+  body.sub #list{height:auto;min-height:calc(3.2rem * var(--ls,1));padding-block:5px;padding-inline:12px;text-align:center}
+}
 
 @media (max-width:820px){
   main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 18px minmax(0,1fr)}
   .video{padding:8px 16px 10px;gap:8px;overflow:visible}
   .vwrap{display:flex;justify-content:center}
   .frame{width:min(100%,calc(var(--vh,100vh) * 16 / 9))}
+  @media (orientation:landscape){ .frame{width:min(100%,calc(var(--vh,max(200px,55vh)) * 16 / 9))} }
   #split{border-left:0;border-top:1px solid var(--line);cursor:row-resize}
   #split::after{width:44px;height:4px}
   .brand,.top .sp{display:none}
@@ -214,7 +233,11 @@ body.compact .row-l.next .tr{display:none}
       <div class="grp spd">
         <label class="lbl" for="rate">速さ</label>
         <select id="rate" aria-label="再生速度"></select>
-        <button class="btn" id="cmpBtn" type="button" aria-pressed="false">歌詞を2行に</button>
+        <select id="viewSel" aria-label="歌詞の表示のしかた">
+          <option value="list">歌詞: 一覧</option>
+          <option value="two">歌詞: 2行</option>
+          <option value="sub">歌詞: 字幕風</option>
+        </select>
       </div>
       <div class="grp loop">
         <span class="lbl">くり返し</span>
@@ -262,7 +285,7 @@ body.compact .row-l.next .tr{display:none}
       <label><input type="checkbox" id="tgTr">訳</label>
       <span id="stat"></span>
     </div>
-    <p class="cmp-hint">タイミングを設定した行だけが流れます。「一覧に戻す」を押してから「タイミングを合わせる」で設定してください。</p>
+    <p class="cmp-hint">タイミングを設定した行だけが流れます。表示を「歌詞: 一覧」に切り替えてから「タイミングを合わせる」で設定してください。</p>
     <div id="list"></div>
   </section>
 </main>
@@ -453,7 +476,11 @@ function setPlayUi() {
 
 /* ---------- 曲の表示 ---------- */
 let cur = null, blocks = [], lines = [], activeLi = -1, sync = false, cursor = 0, shownCursor = -1, shownNext = -1;
-if (opt.compact == null) opt.compact = !!(window.matchMedia && matchMedia('(max-width:820px), (max-height:520px)').matches);
+// 歌詞の表示: list=一覧 / two=動画の下に2行 / sub=動画の下に字幕風の帯
+if (!['list', 'two', 'sub'].includes(opt.view)) {
+  const small = !!(window.matchMedia && matchMedia('(max-width:820px), (max-height:520px)').matches);
+  opt.view = (opt.compact != null ? opt.compact : small) ? 'two' : 'list';
+}
 const reduced = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 function renderPicker() {
   const sel = $('songSel'); sel.innerHTML = '';
@@ -500,10 +527,10 @@ function updateStat() {
   applyCompact();
 }
 function applyCompact() { // タイミング合わせ中は一覧が必要なので、2行表示を一時的に外す
-  const on = !!opt.compact && !sync;
+  const on = opt.view !== 'list' && !sync;
   document.body.classList.toggle('compact', on);
-  $('cmpBtn').textContent = opt.compact ? '一覧に戻す' : '歌詞を2行に';
-  $('cmpBtn').setAttribute('aria-pressed', String(!!opt.compact)); $('cmpBtn').disabled = sync;
+  document.body.classList.toggle('sub', on && opt.view === 'sub');
+  $('viewSel').value = opt.view; $('viewSel').disabled = sync;
 }
 function scrollToLine(el) { const box = $('list'); box.scrollTo({ top: Math.max(0, el.offsetTop - box.clientHeight * .3), behavior: reduced() ? 'auto' : 'smooth' }); }
 function updateLoopUi() {
@@ -683,7 +710,7 @@ $('rate').onchange = e => { const v = +e.target.value || 1; rate = v; lastRaw = 
 $('aBtn').onclick = () => { if (!cur) return; cur.a = Math.round(nowT() * 10) / 10; if (cur.b != null && cur.b <= cur.a) cur.b = null; saveSongs(); updateLoopUi(); };
 $('bBtn').onclick = () => { if (!cur || cur.a == null) return; const t = Math.round(nowT() * 10) / 10; if (t > cur.a + .5) { cur.b = t; saveSongs(); updateLoopUi(); seek(cur.a); } };
 $('abClr').onclick = () => { if (!cur) return; cur.a = cur.b = null; saveSongs(); updateLoopUi(); };
-$('cmpBtn').onclick = () => { opt.compact = !opt.compact; saveOpt(); applyCompact(); if (!opt.compact && activeLi >= 0 && lines[activeLi]) scrollToLine(lines[activeLi].el); };
+$('viewSel').onchange = e => { opt.view = e.target.value; saveOpt(); applyCompact(); if (opt.view === 'list' && activeLi >= 0 && lines[activeLi]) scrollToLine(lines[activeLi].el); };
 $('songSel').onchange = e => { const s = songs.find(x => x.id === e.target.value); if (s) load(s); };
 $('tgTr').checked = !!opt.tr; document.body.classList.toggle('no-tr', !opt.tr);
 $('tgTr').onchange = e => { opt.tr = e.target.checked; saveOpt(); document.body.classList.toggle('no-tr', !opt.tr); };
@@ -840,13 +867,17 @@ function applySizes() {
   rootSt.setProperty('--ls', String(opt.ls || 1));
 }
 const layoutNow = () => document.body.classList.contains('compact') ? 'compact' : (window.matchMedia && matchMedia('(max-width:820px)').matches) ? 'stack' : 'cols';
+const MIN_PLAYER = 200; // YouTubeの決まりで、プレーヤーは縦横とも200px以上で表示する
 function resizeBy(L, base, dx, dy) {
+  const was = { lw: opt.lw, vh: opt.vh, ls: opt.ls }, fr = document.querySelector('.frame'), h0 = fr.getBoundingClientRect().height;
   if (L === 'cols') opt.lw = Math.round(clamp(base.lw - dx, 260, innerWidth * .7));
   else if (L === 'stack') {
-    const maxH = document.querySelector('.vwrap').clientWidth * 9 / 16, h = clamp(base.vh + dy, 90, maxH);
+    const maxH = document.querySelector('.vwrap').clientWidth * 9 / 16, h = clamp(base.vh + dy, MIN_PLAYER, Math.max(MIN_PLAYER, maxH));
     opt.vh = h >= maxH - 2 ? null : Math.round(h);
   } else opt.ls = Math.round(clamp(base.ls - dy / 90, .6, 2.5) * 100) / 100;
   applySizes();
+  const h1 = fr.getBoundingClientRect().height; // 動画が小さくなりすぎる変更は取り消す
+  if (h1 < MIN_PLAYER && h1 < h0) { Object.assign(opt, was); applySizes(); }
 }
 const sizeBase = () => ({ lw: document.querySelector('.lyr').getBoundingClientRect().width, vh: document.querySelector('.frame').getBoundingClientRect().height, ls: opt.ls || 1 });
 let drag = null;
@@ -863,6 +894,8 @@ splitEl.addEventListener('keydown', e => {
   e.preventDefault(); e.stopPropagation(); resizeBy(layoutNow(), sizeBase(), k[0], k[1]); saveOpt();
 });
 applySizes();
+// 字幕風の帯を動画と同じ幅にそろえる
+if (window.ResizeObserver) new ResizeObserver(es => { rootSt.setProperty('--fw', Math.round(es[0].contentRect.width) + 'px'); }).observe(document.querySelector('.frame'));
 
 renderPicker(); fillRates();
 load(songs.find(s => s.id === opt.last) || songs[0] || null);
