@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>弾き語りプロンプター</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* layout: 1画面アプリ。左(スマホは上)=TAB譜つきYouTube動画と再生操作、右(スマホは下)=動画に同期して流れる歌詞と訳 */
+:root{
+  --bg:#EDF0F3; --surface:#FFFFFF; --sunk:#E1E6EB; --fg:#17212B; --muted:#5B6878; --line:#CAD2DA;
+  --mark:#B8430A; --now:#1F4FBF; --now-soft:rgba(31,79,191,.09); --on-now:#FFFFFF; --danger:#B3261E;
+  --f-lyric:"Bricolage Grotesque","Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-ui:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0F141A; --surface:#182029; --sunk:#0A0E13; --fg:#E7ECF1; --muted:#8E9BAA; --line:#2A3540;
+    --mark:#FF9D5C; --now:#8DB2FF; --now-soft:rgba(141,178,255,.12); --on-now:#0F141A; --danger:#FF8A80;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;height:100dvh;background:var(--bg);color:var(--fg);font-family:var(--f-ui);font-size:15px;line-height:1.5;overflow:hidden}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--now);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--now);border-color:var(--now);color:var(--on-now);font-weight:700}
+.btn.danger{color:var(--danger)}
+.btn:disabled{opacity:.45;cursor:default}
+.lbl{font-family:var(--f-mono);font-size:.68rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px;background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{font-weight:700;letter-spacing:.04em;white-space:nowrap}
+#songSel{flex:1 1 150px;min-width:0;max-width:360px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.top .sp{flex:1 1 0}
+
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,1fr)}
+.video{min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;padding:14px 16px;overflow-y:auto}
+.frame{position:relative;width:100%;max-width:100%;aspect-ratio:16/9;background:var(--sunk);border-radius:10px;overflow:hidden;flex:none}
+.frame iframe,#player{position:absolute;inset:0;width:100%;height:100%;border:0}
+#vmsg{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:20px 24px;background:var(--sunk);color:var(--fg);overflow:auto}
+#vmsg h2{margin:0;font-size:1.15rem;text-wrap:balance}
+#vmsg ol{margin:0;padding-left:1.3em;color:var(--muted)}
+#vmsg p{margin:0;color:var(--muted)}
+.transport{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.grp{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
+.ic{width:38px;height:38px;padding:0;display:grid;place-items:center;border-radius:50%;font-family:var(--f-mono);font-size:.72rem}
+#playBtn{width:auto;height:42px;padding:0 18px 0 14px;border-radius:21px;display:flex;gap:8px;align-items:center;font-family:var(--f-ui);font-size:1rem}
+#playBtn svg{width:16px;height:16px;fill:currentColor}
+#time{font-size:.82rem;color:var(--muted);white-space:nowrap}
+#rate{padding:6px 6px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+#loopTx{font-size:.78rem;color:var(--muted);white-space:nowrap}
+.syncbar{display:flex;flex-direction:column;gap:10px;padding:12px 14px;border:1px solid var(--now);border-radius:10px;background:var(--now-soft)}
+.syncbar p{margin:0;font-size:.88rem}
+.syncbar .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#tapBtn{flex:1 1 200px;min-height:56px;font-size:1.1rem;border-radius:12px}
+
+.lyr{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--line)}
+.ltool{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.ltool label{display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+.ltool input{accent-color:var(--now);width:16px;height:16px;margin:0}
+#stat{font-size:.78rem;color:var(--muted)}
+#list{position:relative;flex:1;min-height:0;overflow-y:auto;padding-block:12px 40vh;padding-inline:10px;display:flex;flex-direction:column;gap:2px}
+.row-l{display:grid;grid-template-columns:3.4em minmax(0,1fr);gap:8px;align-items:baseline;padding:8px 8px;border-radius:9px;cursor:pointer;opacity:.5;transition:opacity .2s,background-color .2s;border:1px dashed transparent}
+.row-l:hover{opacity:.8}
+.row-l.on{opacity:1;background:var(--now-soft)}
+.row-l.cursor{opacity:1;border-color:var(--mark)}
+.ts{font-family:var(--f-mono);font-size:.68rem;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.row-l.cursor .ts{color:var(--mark);font-weight:700}
+.en{font-family:var(--f-lyric);font-weight:700;font-size:clamp(1.1rem,.95rem + .7vw,1.55rem);line-height:1.3;overflow-wrap:anywhere}
+.row-l.on .en{color:var(--now)}
+.tr{margin-top:3px;font-size:clamp(.85rem,.8rem + .25vw,1rem);color:var(--muted)}
+.row-l.on .tr{color:var(--fg)}
+body.no-tr .tr{display:none}
+.head{margin:16px 8px 2px;font-family:var(--f-mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.gap{height:12px;flex:none}
+.hint{margin:8vh 12px 0;color:var(--muted)}
+
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--fg);width:min(760px,calc(100vw - 32px));max-height:calc(100% - 32px);padding:20px}
+dialog::backdrop{background:rgba(8,12,18,.55)}
+dialog h2{margin:0 0 14px;font-size:1.15rem}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.fields .wide{grid-column:1/-1}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);min-width:0}
+.fld input,#edText{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:7px 9px;color:var(--fg);min-width:0;width:100%;font-size:.95rem}
+#edText{font-family:var(--f-mono);font-size:.84rem;line-height:1.6;min-height:32vh;resize:vertical}
+details{margin:10px 0;font-size:.85rem}
+summary{cursor:pointer;color:var(--muted)}
+pre.fmt{margin:8px 0 0;overflow-x:auto;background:var(--sunk);border-radius:8px;padding:12px 14px;font-family:var(--f-mono);font-size:.78rem;line-height:1.7}
+pre.fmt i{font-style:normal;color:var(--muted)}
+#found{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.hit{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
+.hit .nm{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+.hit small{color:var(--muted)}
+.msg{min-height:1.4em;font-size:.82rem;color:var(--muted);margin:8px 0}
+.acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.acts .sp{flex:1}
+
+@media (max-width:820px){
+  main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+  .video{padding:8px 16px 10px;gap:8px;overflow:visible}
+  .lyr{border-left:0;border-top:1px solid var(--line)}
+  .brand,.top .sp{display:none}
+  .top{gap:6px}
+  .top .btn{padding:5px 9px;font-size:.85rem}
+  #songSel{flex:1 1 90px}
+  body.syncing #transport{display:none}
+  .syncbar{padding:10px 12px;gap:8px}
+  .syncbar p{font-size:.8rem}
+  #tapBtn{min-height:52px}
+  .fields{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){.row-l{transition:none}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="brand">弾き語りプロンプター</span>
+  <select id="songSel" aria-label="曲を選ぶ"></select>
+  <span class="sp"></span>
+  <button class="btn" id="editBtn" type="button">編集</button>
+  <button class="btn" id="newBtn" type="button">曲を追加</button>
+  <button class="btn" id="dataBtn" type="button">バックアップ</button>
+</header>
+
+<main>
+  <section class="video" aria-label="動画">
+    <div class="frame">
+      <div id="player"></div>
+      <div id="vmsg"></div>
+    </div>
+    <div class="transport" id="transport">
+      <div class="grp">
+        <button class="btn ic" id="backBtn" type="button" aria-label="5秒戻る" title="5秒戻る（←）">−5</button>
+        <button class="btn primary" id="playBtn" type="button"><svg id="playIc" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20"/></svg><span id="playTx">再生</span></button>
+        <button class="btn ic" id="fwdBtn" type="button" aria-label="5秒進む" title="5秒進む（→）">+5</button>
+        <span id="time" class="mono">0:00 / 0:00</span>
+      </div>
+      <div class="grp">
+        <label class="lbl" for="rate">速さ</label>
+        <select id="rate" aria-label="再生速度"></select>
+      </div>
+      <div class="grp">
+        <span class="lbl">くり返し</span>
+        <button class="btn" id="aBtn" type="button" title="今の位置を開始点にする">ここから</button>
+        <button class="btn" id="bBtn" type="button" title="今の位置を終了点にする">ここまで</button>
+        <button class="btn" id="abClr" type="button">解除</button>
+        <span id="loopTx" class="mono"></span>
+      </div>
+    </div>
+    <div class="syncbar" id="syncbar" hidden>
+      <p><b>タイミング合わせ中。</b>点線の行の歌い出しで、下のボタンかスペースキーを押します。行をタップするとそこから録り直せます。</p>
+      <div class="row">
+        <button class="btn primary" id="tapBtn" type="button">ここ！（次の行へ）</button>
+        <button class="btn" id="undoBtn" type="button">ひとつ戻す</button>
+        <button class="btn" id="syncEnd" type="button">終わる</button>
+      </div>
+      <div class="row">
+        <span class="lbl">全体のずれ</span>
+        <button class="btn" id="offM" type="button">歌詞を0.1秒早く</button>
+        <button class="btn" id="offP" type="button">歌詞を0.1秒遅く</button>
+        <span class="sp" style="flex:1"></span>
+        <button class="btn danger" id="clrT" type="button">全部消す</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="lyr" aria-label="歌詞">
+    <div class="ltool">
+      <button class="btn" id="syncBtn" type="button">タイミングを合わせる</button>
+      <label><input type="checkbox" id="tgTr">訳</label>
+      <span id="stat"></span>
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
+
+<dialog id="ed">
+  <form id="edForm">
+    <h2 id="edHead">曲を追加</h2>
+    <div class="fields">
+      <label class="fld">曲名<input id="edTitle" type="text" maxlength="100" autocomplete="off"></label>
+      <label class="fld">アーティスト<input id="edArtist" type="text" maxlength="100" autocomplete="off"></label>
+      <label class="fld wide">YouTubeのURL（TAB譜つき演奏動画など）<input id="edUrl" type="text" inputmode="url" autocomplete="off" placeholder="https://www.youtube.com/watch?v=…"></label>
+    </div>
+    <label class="fld">歌詞と訳
+      <textarea id="edText" spellcheck="false" placeholder="English lyric line&#10;> 次の行に「>」で日本語訳&#10;&#10;# Chorus&#10;Another line&#10;> その訳"></textarea>
+    </label>
+    <details>
+      <summary>書き方</summary>
+<pre class="fmt">English lyric line            <i>… 歌詞は1行ずつ</i>
+&gt; 日本語の訳                   <i>… 次の行に「&gt;」で訳</i>
+# Chorus                      <i>… 「#」で見出し、空行で区切り</i>
+[00:12.30] English lyric line <i>… 行頭の時刻は自動で入る（手で直してもよい）</i></pre>
+    </details>
+    <details id="lrcBox">
+      <summary>歌詞を検索して取り込む（LRCLIB）</summary>
+      <div class="acts" style="margin-top:8px">
+        <button class="btn" id="findBtn" type="button">上の曲名とアーティストで探す</button>
+      </div>
+      <div id="found"></div>
+    </details>
+    <div id="edMsg" class="msg" role="status"></div>
+    <div class="acts">
+      <button class="btn danger" id="delBtn" type="button" hidden>削除</button>
+      <span class="sp"></span>
+      <button class="btn" id="cancelBtn" type="button">キャンセル</button>
+      <button class="btn primary" id="saveBtn" type="submit">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="data">
+  <h2>バックアップ</h2>
+  <p style="margin:0 0 12px;color:var(--muted)">曲はこのブラウザの中に保存されています。別の端末に移すときや、消えると困るときはファイルに書き出してください。</p>
+  <div class="acts">
+    <button class="btn" id="expBtn" type="button">ファイルに書き出す</button>
+    <button class="btn" id="impBtn" type="button">ファイルから読み込む</button>
+    <input id="impFile" type="file" accept="application/json,.json" hidden>
+    <span class="sp"></span>
+    <button class="btn" id="dataClose" type="button">閉じる</button>
+  </div>
+  <div id="dataMsg" class="msg" role="status"></div>
+</dialog>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const KEY = 'hikigatari.songs.v1', OPT = 'hikigatari.opt.v1';
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
+};
+let songs = LS.get(KEY, []); if (!Array.isArray(songs)) songs = [];
+const opt = Object.assign({ tr: true, last: null }, LS.get(OPT, {}));
+const saveSongs = () => LS.set(KEY, songs);
+const saveOpt = () => LS.set(OPT, opt);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = t => { t = Math.max(0, t || 0); const m = Math.floor(t / 60), s = Math.floor(t % 60); return m + ':' + String(s).padStart(2, '0'); };
+const lrcTime = t => { const m = Math.floor(t / 60), s = t - m * 60; return '[' + String(m).padStart(2, '0') + ':' + s.toFixed(2).padStart(5, '0') + ']'; };
+
+/* ---------- 歌詞テキスト ⇄ 行データ ---------- */
+function parseText(text) {
+  const blocks = []; let gap = false;
+  String(text || '').replace(/\r/g, '').split('\n').forEach(raw => {
+    const t = raw.trim();
+    if (!t) { gap = true; return; }
+    if (t[0] === '>') { const l = blocks[blocks.length - 1]; if (l && l.type === 'line') l.tr = (l.tr ? l.tr + ' ' : '') + t.slice(1).trim(); return; }
+    if (/^\[[a-zA-Z#]+:.*\]$/.test(t)) return; // LRCのメタ情報
+    let time = null, body = t;
+    const m = t.match(/^\[(\d{1,3}):(\d{1,2}(?:[.:]\d{1,3})?)\]\s*(.*)$/);
+    if (m) { time = +m[1] * 60 + parseFloat(m[2].replace(':', '.')); body = m[3]; if (!body) { gap = true; return; } }
+    if (gap && blocks.length) blocks.push({ type: 'gap' });
+    gap = false;
+    if (body[0] === '#') { blocks.push({ type: 'head', text: body.replace(/^#+\s*/, '') }); return; }
+    blocks.push({ type: 'line', t: time, text: body, tr: '' });
+  });
+  return blocks;
+}
+function serialize(blocks) {
+  return blocks.map(b => b.type === 'gap' ? '' : b.type === 'head' ? '# ' + b.text
+    : (b.t != null ? lrcTime(b.t) + ' ' : '') + b.text + (b.tr ? '\n> ' + b.tr : '')).join('\n');
+}
+function vidFrom(s) {
+  s = String(s || '').trim();
+  if (/^[\w-]{11}$/.test(s)) return s;
+  try {
+    const u = new URL(s);
+    if (/(^|\.)youtu\.be$/.test(u.hostname)) return (u.pathname.slice(1).match(/^[\w-]{11}/) || [''])[0];
+    const v = u.searchParams.get('v'); if (v && /^[\w-]{11}/.test(v)) return v.slice(0, 11);
+    const m = u.pathname.match(/\/(?:embed|shorts|live)\/([\w-]{11})/); if (m) return m[1];
+  } catch {}
+  return '';
+}
+
+/* ---------- YouTube プレーヤー ---------- */
+let yt = null, ytReady = false, apiAsked = false, apiOk = false, wantVid = '', shownVid = '', state = -1, rate = 1;
+let tBase = 0, tWall = 0, lastRaw = -1;
+const vmsg = html => { const el = $('vmsg'); if (html) { el.innerHTML = html; el.hidden = false; } else el.hidden = true; };
+const ERR = {
+  2: 'YouTubeのURLを読み取れませんでした。「編集」でURLを確認してください。',
+  5: 'この動画はこのプレーヤーで再生できません。',
+  100: 'この動画は見つかりません。削除されたか、非公開になっています。',
+  101: 'この動画は、投稿者の設定でほかのサイトでの再生が禁止されています。別の動画を選んでください。',
+  150: 'この動画は、投稿者の設定でほかのサイトでの再生が禁止されています。別の動画を選んでください。',
+  153: 'このページの開き方ではYouTubeを再生できません。Netlifyなどに置くか、ローカルサーバー経由（http://localhost…）で開いてください。'
+};
+function mount(vid) {
+  wantVid = vid;
+  if (!vid) return;
+  if (location.protocol === 'file:') vmsg('<h2>ファイルを直接開いた状態では動画を再生できません</h2><p>YouTubeの埋め込みは http(s) で配信されたページでだけ動きます。Netlifyに置くか、このフォルダで <span class="mono">npx serve</span> を実行して開いてください。歌詞の登録や編集はこのままでもできます。</p>');
+  else vmsg('<p>動画を読み込んでいます…</p>');
+  if (!apiAsked) {
+    apiAsked = true;
+    window.onYouTubeIframeAPIReady = () => { apiOk = true; mount(wantVid); };
+    const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api';
+    s.onerror = () => vmsg('<h2>YouTubeを読み込めませんでした</h2><p>通信状態を確認して、ページを開き直してください。</p>');
+    document.head.appendChild(s);
+    return;
+  }
+  if (!apiOk) return;
+  if (!yt) {
+    yt = new YT.Player('player', {
+      videoId: vid, width: '100%', height: '100%', playerVars: { playsinline: 1, rel: 0 },
+      events: {
+        onReady: () => { ytReady = true; shownVid = vid; if (location.protocol !== 'file:') vmsg(''); if (wantVid !== shownVid) mount(wantVid); else afterCue(); },
+        onStateChange: e => { state = e.data; lastRaw = -1; if (state === 1) { fillRates(); vmsg(''); } setPlayUi(); },
+        onPlaybackRateChange: e => { rate = e.data || 1; lastRaw = -1; $('rate').value = String(rate); },
+        onError: e => vmsg('<h2>動画を再生できません</h2><p>' + (ERR[e.data] || 'エラーが起きました（コード ' + esc(e.data) + '）。') + '</p>')
+      }
+    });
+    return;
+  }
+  if (!ytReady) return;
+  if (shownVid !== vid) { shownVid = vid; state = -1; lastRaw = -1; yt.cueVideoById(vid); if (location.protocol !== 'file:') vmsg(''); }
+  afterCue();
+}
+function afterCue() { fillRates(); if (cur && cur.speed && cur.speed !== 1) { try { yt.setPlaybackRate(cur.speed); } catch {} } setPlayUi(); }
+function fillRates() {
+  let list = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
+  try { const r = yt && ytReady && yt.getAvailablePlaybackRates(); if (r && r.length > 1) list = r; } catch {}
+  const sel = $('rate'), want = String(cur && cur.speed ? cur.speed : rate);
+  if (sel.dataset.k === list.join()) { sel.value = want; return; }
+  sel.dataset.k = list.join(); sel.innerHTML = '';
+  list.forEach(v => { const o = document.createElement('option'); o.value = String(v); o.textContent = Math.round(v * 100) + '%'; sel.appendChild(o); });
+  sel.value = want; if (!sel.value) sel.value = '1';
+}
+function nowT() { // getCurrentTime は粗い刻みで更新されるので、再生中は経過時間で補う
+  if (!ytReady) return 0;
+  let raw = 0; try { raw = yt.getCurrentTime() || 0; } catch {}
+  const w = performance.now();
+  if (raw !== lastRaw) { lastRaw = raw; tBase = raw; tWall = w; return raw; }
+  return state === 1 ? tBase + Math.min(.5, (w - tWall) / 1000 * rate) : raw;
+}
+const seek = t => { if (!ytReady) return; try { yt.seekTo(Math.max(0, t), true); } catch {} lastRaw = -1; };
+const playV = () => { if (ytReady) { try { yt.playVideo(); } catch {} } };
+const pauseV = () => { if (ytReady) { try { yt.pauseVideo(); } catch {} } };
+function setPlayUi() {
+  const on = state === 1 || state === 3;
+  $('playTx').textContent = on ? '停止' : '再生';
+  $('playIc').innerHTML = on ? '<rect x="5" y="4" width="5" height="16"/><rect x="14" y="4" width="5" height="16"/>' : '<polygon points="6,4 20,12 6,20"/>';
+  ['playBtn', 'backBtn', 'fwdBtn', 'rate', 'aBtn', 'bBtn', 'abClr'].forEach(id => { $(id).disabled = !ytReady || !cur; });
+  $('syncBtn').disabled = !ytReady || !cur || !lines.length;
+}
+
+/* ---------- 曲の表示 ---------- */
+let cur = null, blocks = [], lines = [], activeLi = -1, sync = false, cursor = 0, shownCursor = -1;
+const reduced = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function renderPicker() {
+  const sel = $('songSel'); sel.innerHTML = '';
+  if (!songs.length) { const o = document.createElement('option'); o.value = ''; o.textContent = '曲がありません'; sel.appendChild(o); sel.disabled = true; return; }
+  sel.disabled = false;
+  songs.slice().sort((a, b) => String(a.title).localeCompare(String(b.title), 'ja')).forEach(s => {
+    const o = document.createElement('option'); o.value = s.id; o.textContent = (s.title || '無題') + (s.artist ? ' / ' + s.artist : ''); sel.appendChild(o);
+  });
+  if (cur) sel.value = cur.id;
+}
+function renderList() {
+  const box = $('list'); box.innerHTML = ''; activeLi = -1; shownCursor = -1;
+  lines = blocks.filter(b => b.type === 'line');
+  if (!cur) { box.innerHTML = '<p class="hint">曲を追加すると、ここに歌詞と訳が動画に合わせて流れます。</p>'; updateStat(); return; }
+  if (!lines.length) { box.innerHTML = '<p class="hint">この曲にはまだ歌詞がありません。「編集」から歌詞と訳を入れてください。</p>'; updateStat(); return; }
+  let n = 0;
+  blocks.forEach(b => {
+    const d = document.createElement('div');
+    if (b.type === 'gap') d.className = 'gap';
+    else if (b.type === 'head') { d.className = 'head'; d.textContent = b.text; }
+    else {
+      const i = n++; d.className = 'row-l'; d.tabIndex = 0; d.setAttribute('role', 'button');
+      d.innerHTML = '<span class="ts"></span><div><div class="en">' + esc(b.text) + '</div>' + (b.tr ? '<div class="tr">' + esc(b.tr) + '</div>' : '') + '</div>';
+      d.onclick = () => pickLine(i);
+      d.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); pickLine(i); } };
+      b.el = d;
+    }
+    box.appendChild(d);
+  });
+  paintTimes();
+}
+function paintTimes() { lines.forEach(l => { l.el.firstChild.textContent = l.t != null ? fmt(l.t) : '–'; }); updateStat(); }
+function updateStat() {
+  const un = lines.filter(l => l.t == null).length;
+  $('stat').textContent = !lines.length ? '' : un ? lines.length + '行のうち ' + un + '行はタイミング未設定' : '全' + lines.length + '行のタイミング設定済み';
+  $('syncBtn').hidden = sync; $('syncbar').hidden = !sync; document.body.classList.toggle('syncing', sync);
+}
+function scrollToLine(el) { const box = $('list'); box.scrollTo({ top: Math.max(0, el.offsetTop - box.clientHeight * .3), behavior: reduced() ? 'auto' : 'smooth' }); }
+function updateLoopUi() {
+  const a = cur && cur.a, b = cur && cur.b;
+  $('loopTx').textContent = a == null ? '' : fmt(a) + ' → ' + (b == null ? '…' : fmt(b));
+}
+function load(song) {
+  if (sync) endSync();
+  cur = song; opt.last = song ? song.id : null; saveOpt();
+  blocks = song ? parseText(song.text) : [];
+  $('songSel').value = song ? song.id : ''; $('editBtn').disabled = !song;
+  renderList(); updateLoopUi();
+  if (!song) {
+    pauseV(); wantVid = '';
+    vmsg('<h2>TAB譜つきの演奏動画に、歌詞と訳を合わせて流します</h2><ol><li>「曲を追加」でYouTubeのURLを貼る</li><li>英語の歌詞と訳を入れる（検索して取り込むこともできます）</li><li>動画を流しながら、行の歌い出しでキーを押してタイミングを記録する</li></ol>');
+  } else if (!song.vid) vmsg('<h2>動画が設定されていません</h2><p>「編集」でYouTubeのURLを入れてください。</p>');
+  else mount(song.vid);
+  setPlayUi();
+}
+function persist() { if (!cur) return; cur.text = serialize(blocks); cur.updatedAt = Date.now(); saveSongs(); }
+
+/* ---------- 再生中の追従 ---------- */
+function tick() {
+  if (!cur || !ytReady) return;
+  const t = nowT();
+  let dur = 0; try { dur = yt.getDuration() || 0; } catch {}
+  $('time').textContent = fmt(t) + ' / ' + fmt(dur);
+  if (state === 1 && cur.a != null && cur.b != null && cur.b > cur.a && t >= cur.b) { seek(cur.a); return; }
+  let li = -1;
+  for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt <= t + .05 && (li < 0 || lt >= lines[li].t)) li = i; }
+  if (li !== activeLi) {
+    if (activeLi >= 0 && lines[activeLi]) lines[activeLi].el.classList.remove('on');
+    activeLi = li;
+    if (li >= 0) { lines[li].el.classList.add('on'); if (!sync) scrollToLine(lines[li].el); }
+  }
+  const c = sync ? cursor : -1;
+  if (c !== shownCursor) {
+    if (shownCursor >= 0 && lines[shownCursor]) lines[shownCursor].el.classList.remove('cursor');
+    shownCursor = c;
+    if (c >= 0 && lines[c]) { lines[c].el.classList.add('cursor'); scrollToLine(lines[c].el); }
+  }
+}
+setInterval(tick, 80);
+
+/* ---------- タイミング合わせ ---------- */
+const leadIn = i => { let p = 0; for (let k = i - 1; k >= 0; k--) if (lines[k].t != null) { p = lines[k].t; break; } return Math.max(0, p - 3); };
+function startSync() {
+  if (!cur || !ytReady || !lines.length) return;
+  sync = true; delArmed = false; $('clrT').textContent = '全部消す';
+  const first = lines.findIndex(l => l.t == null);
+  cursor = first >= 0 ? first : 0;
+  seek(leadIn(cursor)); playV(); updateStat();
+}
+function endSync() { sync = false; updateStat(); }
+function stamp() {
+  if (!sync || cursor >= lines.length) return;
+  lines[cursor].t = Math.round(nowT() * 100) / 100; cursor++;
+  persist(); paintTimes();
+  if (cursor >= lines.length) endSync();
+}
+function undo() {
+  if (!sync || cursor <= 0) return;
+  cursor--; lines[cursor].t = null; persist(); paintTimes(); seek(leadIn(cursor)); playV();
+}
+function pickLine(i) {
+  if (sync) { cursor = i; seek(leadIn(i)); playV(); return; }
+  if (lines[i].t != null) { seek(lines[i].t); playV(); }
+}
+function shiftAll(d) { lines.forEach(l => { if (l.t != null) l.t = Math.max(0, Math.round((l.t + d) * 100) / 100); }); persist(); paintTimes(); }
+let delArmed = false;
+$('syncBtn').onclick = startSync; $('syncEnd').onclick = endSync; $('tapBtn').onclick = stamp; $('undoBtn').onclick = undo;
+$('offM').onclick = () => shiftAll(-.1); $('offP').onclick = () => shiftAll(.1);
+$('clrT').onclick = () => {
+  if (!delArmed) { delArmed = true; $('clrT').textContent = 'もう一度押すと全部消す'; return; }
+  delArmed = false; $('clrT').textContent = '全部消す';
+  lines.forEach(l => { l.t = null; }); cursor = 0; persist(); paintTimes(); seek(0); playV();
+};
+
+/* ---------- 再生操作 ---------- */
+$('playBtn').onclick = () => (state === 1 || state === 3) ? pauseV() : playV();
+$('backBtn').onclick = () => seek(nowT() - 5);
+$('fwdBtn').onclick = () => seek(nowT() + 5);
+$('rate').onchange = e => { const v = +e.target.value || 1; rate = v; lastRaw = -1; try { yt.setPlaybackRate(v); } catch {} if (cur) { cur.speed = v; saveSongs(); } };
+$('aBtn').onclick = () => { if (!cur) return; cur.a = Math.round(nowT() * 10) / 10; if (cur.b != null && cur.b <= cur.a) cur.b = null; saveSongs(); updateLoopUi(); };
+$('bBtn').onclick = () => { if (!cur || cur.a == null) return; const t = Math.round(nowT() * 10) / 10; if (t > cur.a + .5) { cur.b = t; saveSongs(); updateLoopUi(); seek(cur.a); } };
+$('abClr').onclick = () => { if (!cur) return; cur.a = cur.b = null; saveSongs(); updateLoopUi(); };
+$('songSel').onchange = e => { const s = songs.find(x => x.id === e.target.value); if (s) load(s); };
+$('tgTr').checked = !!opt.tr; document.body.classList.toggle('no-tr', !opt.tr);
+$('tgTr').onchange = e => { opt.tr = e.target.checked; saveOpt(); document.body.classList.toggle('no-tr', !opt.tr); };
+document.addEventListener('keydown', e => {
+  if ($('ed').open || $('data').open || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if (e.code === 'Space') { e.preventDefault(); if (e.repeat) return; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); if (sync) stamp(); else $('playBtn').click(); }
+  else if (e.target.tagName === 'BUTTON') return;
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); seek(nowT() - 5); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); seek(nowT() + 5); }
+});
+
+/* ---------- 編集 ---------- */
+let editing = null, edDel = false, replaceArmed = null;
+const edMsg = t => { $('edMsg').textContent = t || ''; };
+function openEditor(song) {
+  pauseV(); if (sync) endSync();
+  editing = song; edDel = false; replaceArmed = null; edMsg(''); $('found').innerHTML = ''; $('lrcBox').open = false;
+  $('edHead').textContent = song ? '曲を編集' : '曲を追加';
+  $('edTitle').value = song ? song.title : ''; $('edArtist').value = song ? (song.artist || '') : '';
+  $('edUrl').value = song && song.vid ? 'https://www.youtube.com/watch?v=' + song.vid : '';
+  $('edText').value = song ? song.text : '';
+  $('delBtn').hidden = !song; $('delBtn').textContent = '削除';
+  $('ed').showModal();
+}
+$('edForm').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const url = $('edUrl').value.trim(), vid = vidFrom(url);
+  if (url && !vid) { edMsg('YouTubeのURLを読み取れませんでした。動画ページのURLをそのまま貼ってください。'); return; }
+  const s = editing || { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), speed: 1, a: null, b: null };
+  s.title = $('edTitle').value.trim() || '無題'; s.artist = $('edArtist').value.trim();
+  if (s.vid !== vid) { s.a = s.b = null; }
+  s.vid = vid; s.text = serialize(parseText($('edText').value)); s.updatedAt = Date.now();
+  if (!editing) songs.push(s);
+  if (!saveSongs()) { edMsg('保存できませんでした。ブラウザの保存領域がいっぱいか、保存が無効になっています。'); return; }
+  $('ed').close(); renderPicker(); load(s);
+});
+$('cancelBtn').onclick = () => $('ed').close();
+$('delBtn').onclick = () => {
+  if (!editing) return;
+  if (!edDel) { edDel = true; $('delBtn').textContent = 'もう一度押すと削除'; return; }
+  songs = songs.filter(x => x.id !== editing.id); saveSongs(); $('ed').close(); renderPicker(); load(songs[0] || null);
+};
+$('editBtn').onclick = () => cur && openEditor(cur);
+$('newBtn').onclick = () => openEditor(null);
+
+/* 歌詞の検索（LRCLIB）: 取り込んだ行に訳はつかないので、訳は「>」の行で足す */
+$('findBtn').onclick = async () => {
+  const title = $('edTitle').value.trim(), artist = $('edArtist').value.trim(), box = $('found');
+  if (!title) { edMsg('先に曲名を入れてください。'); return; }
+  $('findBtn').disabled = true; edMsg('探しています…'); box.innerHTML = '';
+  try {
+    const q = new URLSearchParams({ track_name: title }); if (artist) q.set('artist_name', artist);
+    const r = await fetch('https://lrclib.net/api/search?' + q.toString());
+    if (!r.ok) throw new Error('http');
+    const hits = (await r.json() || []).filter(h => h && (h.plainLyrics || h.syncedLyrics)).slice(0, 8);
+    if (!hits.length) { edMsg('見つかりませんでした。曲名やアーティスト名の表記を変えて試すか、歌詞を直接貼り付けてください。'); return; }
+    edMsg(hits.length + '件見つかりました。原曲と違う演奏の動画では、タイミングは使わず「歌詞だけ」を選んでください。');
+    hits.forEach(h => {
+      const d = document.createElement('div'); d.className = 'hit';
+      d.innerHTML = '<span class="nm">' + esc(h.trackName || '') + ' / ' + esc(h.artistName || '') + '<br><small>' + esc(h.albumName || '') + ' · ' + fmt(h.duration) + (h.syncedLyrics ? ' · タイミングつき' : '') + '</small></span>';
+      const add = (label, text) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = label; b.onclick = () => importLyrics(b, label, text); d.appendChild(b); };
+      const plain = h.plainLyrics || String(h.syncedLyrics).replace(/^\[[^\]]*\]\s*/gm, '');
+      add('歌詞だけ', plain); if (h.syncedLyrics) add('タイミングも', h.syncedLyrics);
+      box.appendChild(d);
+    });
+  } catch { edMsg('歌詞の検索に失敗しました。通信状態を確認するか、歌詞を直接貼り付けてください。'); }
+  finally { $('findBtn').disabled = false; }
+};
+function importLyrics(btn, label, text) {
+  if ($('edText').value.trim() && replaceArmed !== btn) {
+    if (replaceArmed) replaceArmed.textContent = replaceArmed.dataset.l;
+    replaceArmed = btn; btn.dataset.l = label; btn.textContent = '今の歌詞と訳を置き換える';
+    return;
+  }
+  replaceArmed = null; btn.textContent = label;
+  $('edText').value = String(text).replace(/\r/g, '').trim();
+  edMsg('取り込みました。各行の下に「>」で訳を足してから保存してください。');
+}
+
+/* ---------- バックアップ ---------- */
+$('dataBtn').onclick = () => { $('dataMsg').textContent = ''; $('data').showModal(); };
+$('dataClose').onclick = () => $('data').close();
+$('expBtn').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'hikigatari', version: 1, songs }, null, 2)], { type: 'application/json' }));
+  a.download = 'hikigatari-songs.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  $('dataMsg').textContent = songs.length + '曲を書き出しました。';
+};
+$('impBtn').onclick = () => $('impFile').click();
+$('impFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const j = JSON.parse(await f.text()), list = Array.isArray(j) ? j : j.songs;
+    if (!Array.isArray(list)) throw new Error('shape');
+    let n = 0;
+    list.forEach(s => {
+      if (!s || typeof s.id !== 'string' || typeof s.text !== 'string') return;
+      const clean = { id: s.id, title: String(s.title || '無題'), artist: String(s.artist || ''), vid: vidFrom(s.vid), text: s.text, speed: +s.speed || 1, a: s.a == null ? null : +s.a, b: s.b == null ? null : +s.b, updatedAt: +s.updatedAt || Date.now() };
+      const i = songs.findIndex(x => x.id === clean.id);
+      if (i < 0) songs.push(clean); else if ((songs[i].updatedAt || 0) < clean.updatedAt) songs[i] = clean; else return;
+      n++;
+    });
+    saveSongs(); renderPicker();
+    const keep = cur && songs.find(x => x.id === cur.id); load(keep || songs[0] || null);
+    $('dataMsg').textContent = n + '曲を読み込みました。';
+  } catch { $('dataMsg').textContent = 'このファイルは読み込めませんでした。このアプリで書き出したファイルを選んでください。'; }
+};
+
+renderPicker(); fillRates();
+load(songs.find(s => s.id === opt.last) || songs[0] || null);
+})();
+</script>
+</body>
+</html>
