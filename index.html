@@ -201,7 +201,7 @@ body.compact .transport{grid-area:t;padding:10px 20px calc(14px + env(safe-area-
 body.compact #npTitle{font-size:1.05rem}
 body.compact #npArtist{font-size:.82rem}
 body.compact .syncbar{display:none}
-body.compact .lyr{grid-area:l;min-height:0;justify-content:center;overflow:hidden}
+body.compact .lyr{grid-area:l;min-height:0;justify-content:center;overflow:hidden;position:relative}
 body.compact .ltool{display:none}
 body.compact #list{flex:none;overflow:hidden;padding-block:2px 0;padding-inline:20px;min-height:calc(6.4rem * var(--ls,1));gap:8px;text-align:center;-webkit-mask-image:none;mask-image:none}
 body.compact .row-l,body.compact .head,body.compact .gap{display:none}
@@ -244,7 +244,7 @@ body.compact .nudge{margin:8px 20px 0}
   body.compact #playBtn svg{width:20px;height:20px}
   body.compact #list{min-height:0;height:calc(4.8rem * var(--ls,1));padding-block:0 6px;padding-inline:max(16px,env(safe-area-inset-left,0px)) 8px;justify-content:center;text-align:left;gap:2px}
   body.compact .row-l .en,body.compact .row-l .tr{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  body.compact .row-l.on .en{font-size:calc(1.25rem * var(--ls,1))}
+  body.compact .row-l.on .en{font-size:calc(1.12rem * var(--ls,1))}
   body.compact .row-l.on .tr{font-size:calc(.8rem * var(--ls,1));margin-top:0}
   body.compact .row-l.next .en{font-size:calc(.85rem * var(--ls,1))}
 }
@@ -302,6 +302,15 @@ body.immersive.compact #list{text-align:center;padding-inline:52px;padding-block
   #tapBtn{min-height:52px}
   .syncbar .row .btn:not(#tapBtn){padding:6px 9px;font-size:.85rem}
   .fields{grid-template-columns:minmax(0,1fr)}
+}
+/* スマホ縦向きは歌詞の文字を少し小さくする（2行・字幕風は境目のドラッグでさらに変えられる） */
+@media (max-width:820px) and (orientation:portrait){
+  .en{font-size:1.2rem}
+  .tr{font-size:.85rem}
+  body.compact .row-l.on .en{font-size:calc(1.4rem * var(--ls,1))}
+  body.compact .row-l.on .tr{font-size:calc(.88rem * var(--ls,1))}
+  body.compact .row-l.next .en{font-size:calc(1rem * var(--ls,1))}
+  body.syncing .en{font-size:1.05rem}
 }
 @media (prefers-reduced-motion:reduce){.row-l,#playBtn,.btn{transition:none}}
 </style>
@@ -703,6 +712,7 @@ function load(song) {
   renderList(); updateLoopUi();
   $('npTitle').textContent = song ? (song.title || '無題') : '曲を追加してください'; $('npArtist').textContent = song ? (song.artist || '') : '';
   const thumb = song && song.vid ? 'https://i.ytimg.com/vi/' + song.vid + '/mqdefault.jpg' : ''; // 動画のサムネイルを曲名の横に出す
+  $('art').onerror = () => { $('art').hidden = true; }; // サムネイルを読み込めないときは、壊れた画像の印を出さない
   $('art').hidden = !thumb; if (thumb) $('art').src = thumb; else $('art').removeAttribute('src');
   $('tCur').textContent = '0:00'; $('seekBar').value = '0'; $('seekBar').style.setProperty('--pct', '0%');
   if (!song) {
@@ -724,24 +734,53 @@ function tick() {
   if (state === 1 && cur.a != null && cur.b != null && cur.b > cur.a && t >= cur.b) { seek(cur.a); return; }
   let li = -1;
   for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt <= t + .05 && (li < 0 || lt >= lines[li].t)) li = i; }
+  let nx = -1;
+  for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt > t + .05 && (nx < 0 || lt < lines[nx].t)) nx = i; }
+  const flow = li !== activeLi ? flowBefore(li) : null; // 2行表示では、行の切り替わりを下から上へ流す
   if (li !== activeLi) {
     if (activeLi >= 0 && lines[activeLi]) lines[activeLi].el.classList.remove('on');
     activeLi = li;
     if (li >= 0) { lines[li].el.classList.add('on'); if (!sync) scrollToLine(lines[li].el); }
   }
-  let nx = -1;
-  for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt > t + .05 && (nx < 0 || lt < lines[nx].t)) nx = i; }
   if (nx !== shownNext) {
     if (shownNext >= 0 && lines[shownNext]) lines[shownNext].el.classList.remove('next');
     shownNext = nx;
     if (nx >= 0) lines[nx].el.classList.add('next');
   }
+  if (flow) flowAfter(flow, li, nx);
   const c = sync ? cursor : -1;
   if (c !== shownCursor) {
     if (shownCursor >= 0 && lines[shownCursor]) lines[shownCursor].el.classList.remove('cursor');
     shownCursor = c;
     if (c >= 0 && lines[c]) { lines[c].el.classList.add('cursor'); scrollToLine(lines[c].el); }
   }
+}
+/* 2行表示の行の切り替わり: いまの行は上へ抜け、次の行がその位置へ上がり、新しい次の行が下から入る。
+   動画の上に文字がかからないよう、歌詞の領域の中だけで動かす */
+function flowBefore(li) {
+  const b = document.body.classList;
+  if (!b.contains('compact') || b.contains('sub') || sync || reduced() || !Element.prototype.animate) return null;
+  const oldEl = activeLi >= 0 && lines[activeLi] ? lines[activeLi].el : null, newEl = li >= 0 && lines[li] ? lines[li].el : null;
+  const shown = el => el && el.offsetParent !== null;
+  return { oldEl, oldRect: shown(oldEl) ? oldEl.getBoundingClientRect() : null, newRect: shown(newEl) ? newEl.getBoundingClientRect() : null };
+}
+function flowAfter(f, li, nx) {
+  const ease = 'cubic-bezier(.2,.7,.2,1)', lyr = document.querySelector('.lyr'), box = lyr.getBoundingClientRect();
+  const left = getComputedStyle($('list')).textAlign !== 'center';
+  if (f.oldEl && f.oldRect) { // 抜けていく行は写しを置いて、上へ動かしながら消す
+    const g = f.oldEl.cloneNode(true); g.className = 'row-l on'; g.removeAttribute('tabindex'); g.setAttribute('aria-hidden', 'true');
+    g.style.cssText = 'position:absolute;margin:0;pointer-events:none;left:' + (f.oldRect.left - box.left) + 'px;top:' + (f.oldRect.top - box.top) + 'px;width:' + f.oldRect.width + 'px;text-align:' + (left ? 'left' : 'center');
+    lyr.appendChild(g);
+    g.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(' + -Math.max(18, f.oldRect.height * .7) + 'px)', opacity: 0 }], { duration: 300, easing: 'ease-in' }).onfinish = () => g.remove();
+  }
+  const on = li >= 0 && lines[li] ? lines[li].el : null;
+  if (on && on.offsetParent !== null) {
+    const r = on.getBoundingClientRect(), dy = f.newRect ? f.newRect.top - r.top : 22, k = f.newRect ? clamp(f.newRect.height / r.height, .55, 1) : 1;
+    on.animate([{ transform: 'translateY(' + dy + 'px) scale(' + k + ')', opacity: .38 }, { transform: 'none', opacity: 1 }], { duration: 420, easing: ease }).onfinish = null;
+    on.style.transformOrigin = left ? 'left top' : 'center top';
+  }
+  const next = nx >= 0 && lines[nx] ? lines[nx].el : null;
+  if (next && next !== on && next.offsetParent !== null) next.animate([{ transform: 'translateY(20px)', opacity: 0 }, { transform: 'none', opacity: .38 }], { duration: 420, easing: ease });
 }
 setInterval(tick, 80);
 
