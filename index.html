@@ -732,10 +732,11 @@ function tick() {
   if (dur !== lastDur) { lastDur = dur; $('tDur').textContent = fmt(dur); loopBand(); }
   if (!seeking) { $('tCur').textContent = fmt(t); const k = dur > 0 ? clamp(t / dur, 0, 1) : 0; $('seekBar').value = String(Math.round(k * 1000)); $('seekBar').style.setProperty('--pct', (k * 100).toFixed(2) + '%'); }
   if (state === 1 && cur.a != null && cur.b != null && cur.b > cur.a && t >= cur.b) { seek(cur.a); return; }
+  const at = t + .05 + (flowOn() ? FLOW_LEAD : 0); // 流れる動きがあるときは、その分だけ早く切り替え始める
   let li = -1;
-  for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt <= t + .05 && (li < 0 || lt >= lines[li].t)) li = i; }
+  for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt <= at && (li < 0 || lt >= lines[li].t)) li = i; }
   let nx = -1;
-  for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt > t + .05 && (nx < 0 || lt < lines[nx].t)) nx = i; }
+  for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt > at && (nx < 0 || lt < lines[nx].t)) nx = i; }
   const flow = li !== activeLi ? flowBefore(li) : null; // 2行表示では、行の切り替わりを下から上へ流す
   if (li !== activeLi) {
     if (activeLi >= 0 && lines[activeLi]) lines[activeLi].el.classList.remove('on');
@@ -757,9 +758,10 @@ function tick() {
 }
 /* 2行表示の行の切り替わり: いまの行は上へ抜け、次の行がその位置へ上がり、新しい次の行が下から入る。
    動画の上に文字がかからないよう、歌詞の領域の中だけで動かす */
+const FLOW_LEAD = .25, FLOW_MS = 220; // 何秒早く動き始めるか／動きにかける時間
+function flowOn() { const b = document.body.classList; return b.contains('compact') && !b.contains('sub') && !sync && !reduced() && !!Element.prototype.animate; }
 function flowBefore(li) {
-  const b = document.body.classList;
-  if (!b.contains('compact') || b.contains('sub') || sync || reduced() || !Element.prototype.animate) return null;
+  if (!flowOn()) return null;
   const oldEl = activeLi >= 0 && lines[activeLi] ? lines[activeLi].el : null, newEl = li >= 0 && lines[li] ? lines[li].el : null;
   const shown = el => el && el.offsetParent !== null;
   return { oldEl, oldRect: shown(oldEl) ? oldEl.getBoundingClientRect() : null, newRect: shown(newEl) ? newEl.getBoundingClientRect() : null };
@@ -771,16 +773,16 @@ function flowAfter(f, li, nx) {
     const g = f.oldEl.cloneNode(true); g.className = 'row-l on'; g.removeAttribute('tabindex'); g.setAttribute('aria-hidden', 'true');
     g.style.cssText = 'position:absolute;margin:0;pointer-events:none;left:' + (f.oldRect.left - box.left) + 'px;top:' + (f.oldRect.top - box.top) + 'px;width:' + f.oldRect.width + 'px;text-align:' + (left ? 'left' : 'center');
     lyr.appendChild(g);
-    g.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(' + -Math.max(18, f.oldRect.height * .7) + 'px)', opacity: 0 }], { duration: 300, easing: 'ease-in' }).onfinish = () => g.remove();
+    g.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(' + -Math.max(18, f.oldRect.height * .7) + 'px)', opacity: 0 }], { duration: FLOW_MS * .8, easing: 'ease-in' }).onfinish = () => g.remove();
   }
   const on = li >= 0 && lines[li] ? lines[li].el : null;
   if (on && on.offsetParent !== null) {
     const r = on.getBoundingClientRect(), dy = f.newRect ? f.newRect.top - r.top : 22, k = f.newRect ? clamp(f.newRect.height / r.height, .55, 1) : 1;
-    on.animate([{ transform: 'translateY(' + dy + 'px) scale(' + k + ')', opacity: .38 }, { transform: 'none', opacity: 1 }], { duration: 420, easing: ease }).onfinish = null;
+    on.animate([{ transform: 'translateY(' + dy + 'px) scale(' + k + ')', opacity: .38 }, { opacity: 1, offset: .45 }, { transform: 'none', opacity: 1 }], { duration: FLOW_MS, easing: ease }); // 明るさは先に上げて、すぐ読めるようにする
     on.style.transformOrigin = left ? 'left top' : 'center top';
   }
   const next = nx >= 0 && lines[nx] ? lines[nx].el : null;
-  if (next && next !== on && next.offsetParent !== null) next.animate([{ transform: 'translateY(20px)', opacity: 0 }, { transform: 'none', opacity: .38 }], { duration: 420, easing: ease });
+  if (next && next !== on && next.offsetParent !== null) next.animate([{ transform: 'translateY(20px)', opacity: 0 }, { transform: 'none', opacity: .38 }], { duration: FLOW_MS, easing: ease });
 }
 setInterval(tick, 80);
 
