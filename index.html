@@ -206,8 +206,9 @@ body.immersive .vwrap{padding:env(safe-area-inset-top,0px) env(safe-area-inset-r
 body.immersive .frame{border-radius:0}
 body.immersive .lyr{position:relative;border-radius:0}
 body.immersive.compact #list{text-align:center;padding-inline:52px;padding-block:6px calc(6px + env(safe-area-inset-bottom,0px))}
-#fsExit{position:absolute;z-index:2;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));width:34px;height:34px;opacity:.55}
-#fsExit:hover,#fsExit:focus-visible{opacity:1}
+#fsExit,#fsBack{position:absolute;z-index:2;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));width:34px;height:34px;opacity:.55}
+#fsBack{right:auto;left:8px}
+#fsExit:hover,#fsExit:focus-visible,#fsBack:hover,#fsBack:focus-visible{opacity:1}
 @media (orientation:landscape){
   body.immersive.compact main{grid-template-rows:minmax(0,1fr) auto;grid-template-areas:"v" "l"}
 }
@@ -258,6 +259,7 @@ body.immersive.compact #list{text-align:center;padding-inline:52px;padding-block
         <button class="btn ic" id="backBtn" type="button" aria-label="5秒戻る" title="5秒戻る（←）">−5</button>
         <button class="btn primary" id="playBtn" type="button"><svg id="playIc" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20"/></svg><span id="playTx">再生</span></button>
         <button class="btn ic" id="fwdBtn" type="button" aria-label="5秒進む" title="5秒進む（→）">+5</button>
+        <button class="btn ic" id="aGo" type="button" hidden aria-label="「ここから」の位置に戻る" title="「ここから」の位置に戻る（R）"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
         <span id="time" class="mono">0:00 / 0:00</span>
       </div>
       <div class="grp spd">
@@ -316,6 +318,7 @@ body.immersive.compact #list{text-align:center;padding-inline:52px;padding-block
       <label><input type="checkbox" id="tgTr">訳</label>
       <span id="stat"></span>
     </div>
+    <button class="btn ic" id="fsBack" type="button" hidden aria-label="「ここから」の位置に戻る" title="「ここから」の位置に戻る（R）"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
     <button class="btn ic" id="fsExit" type="button" hidden aria-label="全画面をやめる" title="全画面をやめる（Esc）"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
     <div class="nudge" id="nudge" hidden><span id="nudgeTx"></span><button class="btn primary" id="nudgeGo" type="button">タイミングを合わせる</button><button class="btn" id="nudgeOk" type="button">このままでよい</button></div>
     <div id="list"></div>
@@ -511,7 +514,7 @@ function setPlayUi() {
   const on = state === 1 || state === 3;
   $('playTx').textContent = on ? '停止' : '再生';
   $('playIc').innerHTML = on ? '<rect x="5" y="4" width="5" height="16"/><rect x="14" y="4" width="5" height="16"/>' : '<polygon points="6,4 20,12 6,20"/>';
-  ['playBtn', 'backBtn', 'fwdBtn', 'rate', 'aBtn', 'bBtn', 'abClr'].forEach(id => { $(id).disabled = !ytReady || !cur; });
+  ['playBtn', 'backBtn', 'fwdBtn', 'rate', 'aBtn', 'bBtn', 'abClr', 'aGo', 'fsBack'].forEach(id => { $(id).disabled = !ytReady || !cur; });
   $('syncBtn').disabled = $('nudgeGo').disabled = !ytReady || !cur || !lines.length;
 }
 
@@ -582,6 +585,7 @@ function scrollToLine(el) { const box = $('list'); box.scrollTo({ top: Math.max(
 function updateLoopUi() {
   const a = cur && cur.a, b = cur && cur.b;
   $('loopTx').textContent = a == null ? '' : fmt(a) + ' → ' + (b == null ? '…' : fmt(b));
+  $('aGo').hidden = a == null; $('fsBack').hidden = a == null || !immersive;
 }
 function load(song) {
   if (sync) endSync();
@@ -756,6 +760,8 @@ $('fwdBtn').onclick = () => seek(nowT() + 5);
 $('rate').onchange = e => { const v = +e.target.value || 1; rate = v; lastRaw = -1; try { yt.setPlaybackRate(v); } catch {} if (cur) { cur.speed = v; saveSongs(); } };
 $('aBtn').onclick = () => { if (!cur) return; cur.a = Math.round(nowT() * 10) / 10; if (cur.b != null && cur.b <= cur.a) cur.b = null; saveSongs(); updateLoopUi(); };
 $('bBtn').onclick = () => { if (!cur || cur.a == null) return; const t = Math.round(nowT() * 10) / 10; if (t > cur.a + .5) { cur.b = t; saveSongs(); updateLoopUi(); seek(cur.a); } };
+const goA = () => { if (cur && cur.a != null) { seek(cur.a); playV(); } }; // 「ここから」の位置に戻って再生
+$('aGo').onclick = goA; $('fsBack').onclick = goA;
 $('abClr').onclick = () => { if (!cur) return; cur.a = cur.b = null; saveSongs(); updateLoopUi(); };
 $('viewSel').onchange = e => { opt.view = e.target.value; saveOpt(); applyCompact(); if (opt.view === 'list' && activeLi >= 0 && lines[activeLi]) scrollToLine(lines[activeLi].el); };
 $('songSel').onchange = e => { const s = songs.find(x => x.id === e.target.value); if (s) load(s); };
@@ -766,6 +772,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); if (e.repeat) return; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); if (sync) stamp(); else $('playBtn').click(); }
   else if (e.key === 'Escape') { if (immersive && !fsNow()) setImmersive(false); }
   else if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) setImmersive(!immersive);
+  else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) goA();
   else if (e.target.tagName === 'BUTTON') return;
   else if (e.key === 'ArrowLeft') { e.preventDefault(); seek(nowT() - 5); }
   else if (e.key === 'ArrowRight') { e.preventDefault(); seek(nowT() + 5); }
@@ -962,7 +969,7 @@ let immersive = false, fsByApi = false;
 function setImmersive(on, fromBrowser) {
   on = !!on && document.body.classList.contains('compact');
   if (on === immersive) return;
-  immersive = on; document.body.classList.toggle('immersive', on); $('fsExit').hidden = !on;
+  immersive = on; document.body.classList.toggle('immersive', on); $('fsExit').hidden = !on; updateLoopUi();
   if (on && !fromBrowser && fsReq && !fsNow()) {
     try { fsByApi = true; const p = fsReq.call(fsRoot); if (p && p.catch) p.catch(() => { fsByApi = false; }); } catch { fsByApi = false; }
   }
