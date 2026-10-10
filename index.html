@@ -73,6 +73,13 @@ body.dragging{user-select:none;-webkit-user-select:none}
 #time{font-size:.82rem;color:var(--muted);white-space:nowrap}
 #rate,#viewSel{padding:6px 6px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 #loopTx{font-size:.78rem;color:var(--muted);white-space:nowrap}
+/* 前に作った「ここから〜ここまで」。押すとその区間をくり返す */
+#loops{display:flex;flex-wrap:wrap;gap:6px;flex-basis:100%}
+.lp{display:inline-flex;align-items:stretch;max-width:100%;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.lp .btn{border:0;border-radius:0;padding:5px 9px;font-size:.82rem;min-width:0;max-width:17em;overflow:hidden;text-overflow:ellipsis}
+.lp .btn[aria-pressed="true"]{background:var(--now-soft);color:var(--now);font-weight:700}
+.lpDel{border:0;border-left:1px solid var(--line);background:transparent;color:var(--muted);padding:0 9px;cursor:pointer;font-size:1rem;line-height:1}
+.lpDel:hover{color:var(--danger)}
 .syncbar{display:flex;flex-direction:column;gap:10px;padding:12px 14px;border:1px solid var(--now);border-radius:10px;background:var(--now-soft)}
 .syncbar p{margin:0;font-size:.88rem}
 .syncbar .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -278,6 +285,7 @@ body.immersive.compact #list{text-align:center;padding-inline:52px;padding-block
         <button class="btn" id="bBtn" type="button" title="今の位置を終了点にする">ここまで</button>
         <button class="btn" id="abClr" type="button">解除</button>
         <span id="loopTx" class="mono"></span>
+        <div id="loops" role="group" aria-label="前に作った区間" hidden></div>
       </div>
     </div>
     <div class="syncbar" id="syncbar" hidden>
@@ -586,6 +594,26 @@ function updateLoopUi() {
   const a = cur && cur.a, b = cur && cur.b;
   $('loopTx').textContent = a == null ? '' : fmt(a) + ' → ' + (b == null ? '…' : fmt(b));
   $('aGo').hidden = a == null; $('fsBack').hidden = a == null || !immersive;
+  const box = $('loops'); box.innerHTML = '';
+  ((cur && cur.loops) || []).slice().sort((x, y) => x.a - y.a).forEach(lp => {
+    const w = document.createElement('span'), go = document.createElement('button'), del = document.createElement('button');
+    const range = fmt(lp.a) + '–' + fmt(lp.b), ln = lines.find(x => x.t != null && x.t >= lp.a - 1 && x.t < lp.b); // 区間の最初の行を目印に添える
+    w.className = 'lp'; go.type = del.type = 'button'; go.className = 'btn'; del.className = 'lpDel';
+    go.textContent = range + (ln ? ' ' + (ln.text.length > 12 ? ln.text.slice(0, 12) + '…' : ln.text) : '');
+    go.title = 'この区間をくり返す';
+    go.setAttribute('aria-pressed', String(a != null && b != null && Math.abs(a - lp.a) < .05 && Math.abs(b - lp.b) < .05));
+    go.onclick = () => { cur.a = lp.a; cur.b = lp.b; saveSongs(); updateLoopUi(); seek(lp.a); playV(); };
+    del.textContent = '×'; del.setAttribute('aria-label', range + ' の区間を消す'); del.title = 'この区間を消す';
+    del.onclick = () => { cur.loops = cur.loops.filter(x => x !== lp); saveSongs(); updateLoopUi(); };
+    w.append(go, del); box.appendChild(w);
+  });
+  box.hidden = !box.children.length;
+}
+function rememberLoop(a, b) { // 作った区間は自動で残す。ほぼ同じ区間は増やさず、12個を超えたら古いものから消す
+  const L = cur.loops || (cur.loops = []), same = L.find(x => Math.abs(x.a - a) < .5 && Math.abs(x.b - b) < .5);
+  if (same) { same.a = a; same.b = b; same.at = Date.now(); return; }
+  L.push({ a, b, at: Date.now() });
+  if (L.length > 12) L.splice(L.indexOf(L.reduce((m, x) => (x.at || 0) < (m.at || 0) ? x : m)), 1);
 }
 function load(song) {
   if (sync) endSync();
@@ -759,7 +787,7 @@ $('backBtn').onclick = () => seek(nowT() - 5);
 $('fwdBtn').onclick = () => seek(nowT() + 5);
 $('rate').onchange = e => { const v = +e.target.value || 1; rate = v; lastRaw = -1; try { yt.setPlaybackRate(v); } catch {} if (cur) { cur.speed = v; saveSongs(); } };
 $('aBtn').onclick = () => { if (!cur) return; cur.a = Math.round(nowT() * 10) / 10; if (cur.b != null && cur.b <= cur.a) cur.b = null; saveSongs(); updateLoopUi(); };
-$('bBtn').onclick = () => { if (!cur || cur.a == null) return; const t = Math.round(nowT() * 10) / 10; if (t > cur.a + .5) { cur.b = t; saveSongs(); updateLoopUi(); seek(cur.a); } };
+$('bBtn').onclick = () => { if (!cur || cur.a == null) return; const t = Math.round(nowT() * 10) / 10; if (t > cur.a + .5) { cur.b = t; rememberLoop(cur.a, t); saveSongs(); updateLoopUi(); seek(cur.a); } };
 const goA = () => { if (cur && cur.a != null) { seek(cur.a); playV(); } }; // 「ここから」の位置に戻って再生
 $('aGo').onclick = goA; $('fsBack').onclick = goA;
 $('abClr').onclick = () => { if (!cur) return; cur.a = cur.b = null; saveSongs(); updateLoopUi(); };
@@ -803,7 +831,7 @@ $('edForm').addEventListener('submit', ev => {
   if (url && !vid) { edMsg('YouTubeのURLを読み取れませんでした。動画ページのURLをそのまま貼ってください。'); return; }
   const s = editing || { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), speed: 1, a: null, b: null };
   s.title = $('edTitle').value.trim() || '無題'; s.artist = $('edArtist').value.trim();
-  if (s.vid !== vid) { s.a = s.b = null; }
+  if (s.vid !== vid) { s.a = s.b = null; s.loops = []; } // 動画を替えたら、前の動画の区間は使えない
   s.vid = vid; s.text = serialize(parseText($('edText').value)); s.updatedAt = Date.now();
   if (importedSynced) s.imp = true; // 取り込んだタイミングは原曲のもの。動画に合わせるよう案内を出す
   if (!editing) songs.push(s);
@@ -909,7 +937,8 @@ $('impFile').onchange = async e => {
     let n = 0;
     list.forEach(s => {
       if (!s || typeof s.id !== 'string' || typeof s.text !== 'string') return;
-      const clean = { id: s.id, title: String(s.title || '無題'), artist: String(s.artist || ''), vid: vidFrom(s.vid), text: s.text, speed: +s.speed || 1, a: s.a == null ? null : +s.a, b: s.b == null ? null : +s.b, updatedAt: +s.updatedAt || Date.now() };
+      const clean = { id: s.id, title: String(s.title || '無題'), artist: String(s.artist || ''), vid: vidFrom(s.vid), text: s.text, speed: +s.speed || 1, a: s.a == null ? null : +s.a, b: s.b == null ? null : +s.b, updatedAt: +s.updatedAt || Date.now(),
+        loops: (Array.isArray(s.loops) ? s.loops : []).filter(x => x && isFinite(x.a) && isFinite(x.b) && +x.b > +x.a).slice(0, 12).map(x => ({ a: +x.a, b: +x.b, at: +x.at || 0 })) };
       const i = songs.findIndex(x => x.id === clean.id);
       if (i < 0) songs.push(clean); else if ((songs[i].updatedAt || 0) < clean.updatedAt) songs[i] = clean; else return;
       n++;
