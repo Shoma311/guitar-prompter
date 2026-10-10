@@ -134,7 +134,7 @@ body.more .transport .grp.spd,body.more .transport .grp.loop{display:flex}
 .syncbar details .row{margin-top:8px}
 
 /* 歌詞: いまの行だけ明るく、ほかは沈める */
-.lyr{min-width:0;min-height:0;display:flex;flex-direction:column}
+.lyr{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column}
 .ltool{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 20px 4px 14px}
 .ltool label{display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;font-size:.88rem;color:var(--dim)}
 .ltool input{accent-color:var(--accent);width:16px;height:16px;margin:0}
@@ -320,6 +320,50 @@ body.immersive.compact #list{text-align:center;padding-inline:52px;padding-block
   body.compact .row-l.next .en{font-size:calc(1rem * var(--ls,1))}
   body.syncing .en{font-size:1.05rem}
 }
+/* 「いま！」: ふだんの再生中に、歌い出しで押してタイミングを直す。動画には重ねず、歌詞の領域の中に置く */
+#snapBox{position:absolute;z-index:3;right:16px;bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;justify-content:flex-end;gap:8px;max-width:calc(100% - 32px);pointer-events:none}
+#snapBox>*{pointer-events:auto}
+#snapBtn{min-height:44px;padding:0 20px;font-size:1rem;font-weight:800;color:var(--accent);background:var(--sheet);border-color:var(--accent);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+#snapBtn:hover{background:#16263C}
+#snapUndo{min-height:38px;background:var(--sheet);border-color:var(--line);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+#snapTx{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.8rem;background:var(--sheet);border-radius:999px;padding:8px 12px}
+#snapTx:empty{display:none}
+@media (orientation:portrait){ /* 2行・字幕風の縦向き: 歌詞の下に1段あけて、まん中に置く */
+  body.compact.snap .lyr{padding-bottom:56px}
+  body.compact #snapBox{left:0;right:0;bottom:6px;max-width:none;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);padding-inline:12px}
+  body.compact #snapTx{grid-column:1;grid-row:1;justify-self:end;background:transparent;padding:0;color:var(--dim);white-space:normal;text-wrap:balance;text-align:right;font-size:.74rem;line-height:1.3}
+  body.compact #snapBtn{grid-column:2;grid-row:1}
+  body.compact #snapUndo{grid-column:3;grid-row:1;justify-self:start}
+  body.immersive #snapBox{padding-inline:50px}
+  body.sub .lyr{background:transparent} /* 黒い帯は歌詞だけにして、ボタンは帯の下に出す */
+  body.sub #list{background:var(--cap-bg);border-radius:0 0 14px 14px}
+  body.sub.immersive #list{border-radius:0}
+  body.sub .nudge{order:2;margin-bottom:4px}
+}
+@media (orientation:landscape){ /* 横向き: 歌詞の右に置き、歌詞はその分だけ内側に寄せる */
+  body.compact #snapBox{right:16px;bottom:auto;top:50%;transform:translateY(-50%)}
+  body.compact #snapTx{display:none}
+  body.compact.snap #list{padding-inline:184px}
+  body.sub.snap #list{padding-inline:116px}
+  body.immersive #snapBox{right:50px}
+  body.immersive.compact.snap #list{padding-inline:218px}
+  body.immersive.sub.snap #list{padding-inline:150px}
+}
+@media (orientation:landscape) and (max-height:520px){ /* スマホ横向き */
+  body:not(.sub):not(.immersive) #snapBox{display:none} /* 一覧と2行は歌詞の幅が足りないので出さない（全画面にすると出る） */
+  body.compact.snap #list{padding-inline:max(16px,env(safe-area-inset-left,0px)) 8px}
+  body.sub.snap #list{padding-inline:12px 100px}
+  body.compact #snapBox{right:8px}
+  body.immersive #snapBox{right:50px}
+  body.compact #snapBtn{min-height:40px;padding:0 16px}
+  body.compact #snapUndo{min-height:32px;padding:0 12px;font-size:.85rem}
+  body.immersive.compact:not(.sub) #snapBox{top:auto;bottom:4px;transform:none;flex-direction:column;align-items:flex-end;gap:3px} /* 「戻す」は「いま！」の上に重ねる */
+  body.immersive.compact.snap:not(.sub) .lyr{min-height:80px}
+  body.immersive.compact.snap #list{padding-inline:150px}
+}
+/* 歌詞の領域が足りないとき（小さい画面で設定を開いているときなど）は、引っ込めて歌詞を優先する */
+body.tight.compact.snap .lyr{padding-bottom:0}
+body.tight #snapBox{display:none}
 @media (prefers-reduced-motion:reduce){.row-l,#playBtn,.btn{transition:none}}
 </style>
 </head>
@@ -424,6 +468,11 @@ body.immersive.compact #list{text-align:center;padding-inline:52px;padding-block
     </div>
     <button class="btn ic" id="fsBack" type="button" hidden aria-label="「ここから」の位置に戻る" title="「ここから」の位置に戻る（R）"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
     <button class="btn ic" id="fsExit" type="button" hidden aria-label="全画面をやめる" title="全画面をやめる（Esc）"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
+    <div id="snapBox" hidden>
+      <span id="snapTx" role="status"></span>
+      <button class="btn" id="snapUndo" type="button" hidden>戻す</button>
+      <button class="btn" id="snapBtn" type="button" title="歌い出しで押すと、その行がいまの位置に合います（Enter）">いま！</button>
+    </div>
     <div class="nudge" id="nudge" hidden><span id="nudgeTx"></span><button class="btn primary" id="nudgeGo" type="button">タイミングを合わせる</button><button class="btn" id="nudgeOk" type="button">このままでよい</button></div>
     <div id="list"></div>
   </section>
@@ -583,7 +632,7 @@ function mount(vid) {
       videoId: vid, width: '100%', height: '100%', playerVars: { playsinline: 1, rel: 0 },
       events: {
         onReady: () => { ytReady = true; shownVid = vid; if (location.protocol !== 'file:') vmsg(''); if (wantVid !== shownVid) mount(wantVid); else afterCue(); },
-        onStateChange: e => { state = e.data; lastRaw = -1; if (state === 1) { fillRates(); vmsg(''); } setPlayUi(); },
+        onStateChange: e => { state = e.data; lastRaw = -1; if (state === 1) { fillRates(); vmsg(''); if (rateDue) { rateDue = false; if (rateBefore == null) applyRate(true); } } setPlayUi(); },
         onPlaybackRateChange: e => { rate = e.data || 1; lastRaw = -1; $('rate').value = String(rate); },
         onError: e => vmsg('<h2>動画を再生できません</h2><p>' + (ERR[e.data] || 'エラーが起きました（コード ' + esc(e.data) + '）。') + '</p>')
       }
@@ -594,7 +643,16 @@ function mount(vid) {
   if (shownVid !== vid) { shownVid = vid; state = -1; lastRaw = -1; yt.cueVideoById(vid); if (location.protocol !== 'file:') vmsg(''); }
   afterCue();
 }
-function afterCue() { fillRates(); if (cur && cur.speed && cur.speed !== 1) { try { yt.setPlaybackRate(cur.speed); } catch {} } setPlayUi(); }
+function afterCue() { applyRate(); rateDue = true; fillRates(); setPlayUi(); }
+// 速さは曲ごとに持つ。プレーヤーは前の曲の速さを覚えているので、曲を出すたびにその曲の速さ（なければ100%）へ必ず戻す
+let rateDue = false;
+function applyRate(onlyIfOff) {
+  if (!ytReady) return;
+  const want = cur ? (+cur.speed || 1) : 1;
+  if (onlyIfOff) { let now = want; try { now = yt.getPlaybackRate(); } catch {} if (now === want) return; }
+  rate = want; lastRaw = -1; try { yt.setPlaybackRate(want); } catch {}
+  $('rate').value = String(want);
+}
 function fillRates() {
   let list = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
   try { const r = yt && ytReady && yt.getAvailablePlaybackRates(); if (r && r.length > 1) list = r; } catch {}
@@ -619,7 +677,7 @@ function setPlayUi() {
   $('playTx').textContent = on ? '停止' : '再生'; $('playBtn').setAttribute('aria-label', on ? '停止' : '再生');
   $('playIc').innerHTML = on ? '<rect x="5" y="4" width="5" height="16" rx="1"/><rect x="14" y="4" width="5" height="16" rx="1"/>' : '<polygon points="7,4 21,12 7,20"/>';
   ['playBtn', 'backBtn', 'fwdBtn', 'rate', 'aBtn', 'bBtn', 'abClr', 'aGo', 'fsBack', 'seekBar'].forEach(id => { $(id).disabled = !ytReady || !cur; });
-  $('syncBtn').disabled = $('nudgeGo').disabled = !ytReady || !cur || !lines.length;
+  $('syncBtn').disabled = $('nudgeGo').disabled = $('snapBtn').disabled = !ytReady || !cur || !lines.length;
 }
 
 /* ---------- 曲の表示 ---------- */
@@ -640,7 +698,7 @@ function renderPicker() {
   if (cur) sel.value = cur.id;
 }
 function renderList() {
-  const box = $('list'); box.innerHTML = ''; activeLi = -1; shownCursor = -1; shownNext = -1;
+  const box = $('list'); box.innerHTML = ''; activeLi = -1; shownCursor = -1; shownNext = -1; snapClear();
   lines = blocks.filter(b => b.type === 'line');
   if (!cur) { box.innerHTML = '<p class="hint">曲を追加すると、ここに歌詞と訳が動画に合わせて流れます。</p>'; updateStat(); return; }
   if (!lines.length) { box.innerHTML = '<p class="hint">この曲にはまだ歌詞がありません。「編集」から歌詞と訳を入れてください。</p>'; updateStat(); return; }
@@ -668,8 +726,10 @@ function updateStat() {
   // 次にやることの案内: タイミングがまだ無い曲と、原曲のタイミングを取り込んだままの曲に出す
   const none = lines.length > 0 && !lines.some(l => l.t != null), imp = !!(cur && cur.imp) && !none;
   $('nudge').hidden = sync || !(none || imp); $('nudgeOk').hidden = none;
-  $('nudgeTx').textContent = none ? 'まだタイミングがありません。動画に合わせると、歌詞が流れるようになります。'
-    : '取り込んだタイミングは原曲のものです。動画とずれていたら、1回押すだけで合わせられます。';
+  $('nudgeTx').textContent = none ? 'まだタイミングがありません。動画を流して、行の歌い出しごとに「いま！」を押すと記録できます。'
+    : '取り込んだタイミングは原曲のものです。動画とずれていたら、歌い出しで「いま！」を押すと合わせられます。';
+  const snapOn = !!cur && lines.length > 0 && !sync; // 「いま！」はふだんの画面でだけ出す
+  $('snapBox').hidden = !snapOn; document.body.classList.toggle('snap', snapOn);
   applyCompact();
 }
 function applyCompact() { // タイミング合わせ中は一覧が必要なので、2行表示を一時的に外す
@@ -678,6 +738,13 @@ function applyCompact() { // タイミング合わせ中は一覧が必要なの
   document.body.classList.toggle('sub', on && opt.view === 'sub');
   $('viewSel').value = opt.view; $('viewSel').disabled = sync;
   $('fsBtn').hidden = !on; if (!on) setImmersive(false); // 一覧表示やタイミング合わせでは全画面を解く
+  fitSnap();
+}
+const SNAP_ROOM = 56; // 縦向きの2行表示で「いま！」のためにあける高さ（CSSの .lyr の padding-bottom と同じ）
+function fitSnap() {
+  const b = document.body.classList, two = b.contains('compact') && b.contains('snap') && !b.contains('sub') && !b.contains('immersive');
+  const port = !!(window.matchMedia && matchMedia('(orientation:portrait)').matches);
+  b.toggle('tight', two && port && document.querySelector('.lyr').clientHeight < (parseFloat(getComputedStyle($('list')).minHeight) || 0) + SNAP_ROOM);
 }
 function scrollToLine(el) { const box = $('list'); box.scrollTo({ top: Math.max(0, el.offsetTop - box.clientHeight * .3), behavior: reduced() ? 'auto' : 'smooth' }); }
 let lastDur = 0, seeking = false;
@@ -744,6 +811,7 @@ function tick() {
   for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt <= at && (li < 0 || lt >= lines[li].t)) li = i; }
   let nx = -1;
   for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt > at && (nx < 0 || lt < lines[nx].t)) nx = i; }
+  if (!sync && lines[li + 1] && lines[li + 1].t == null) nx = li + 1; // 次がまだ記録していない行なら、それを「次」に出す（「いま！」で記録できる）
   const flow = li !== activeLi ? flowBefore(li) : null; // 2行表示では、行の切り替わりを下から上へ流す
   if (li !== activeLi) {
     if (activeLi >= 0 && lines[activeLi]) lines[activeLi].el.classList.remove('on');
@@ -904,6 +972,47 @@ $('clrT').onclick = () => {
   lines.forEach(l => { l.t = null; }); persist(); paintTimes(); setMode('line');
 };
 
+/* ---------- 「いま！」 ----------
+   ふだんの再生中に、歌い出しで押すだけでタイミングを直す。
+   ・次の行がまだ記録されていない → その行を記録する
+   ・記録済み → いまの行と次の行のうち近いほうを「いま」に合わせ、その行から後ろも同じだけずらす
+     （取り込んだままの曲は、前の行も含めて全体をずらす） */
+const SNAP_FAR = 10, SNAP_KEEP = 10000; // これより離れた行は動かさない（秒）／「戻す」を出しておく時間
+let snapPrev = null, snapTimer = 0;
+function snapSay(tx, prev) {
+  snapPrev = prev || null; $('snapTx').textContent = tx; $('snapUndo').hidden = !snapPrev;
+  clearTimeout(snapTimer); snapTimer = setTimeout(snapClear, SNAP_KEEP);
+}
+function snapClear() { clearTimeout(snapTimer); snapPrev = null; $('snapTx').textContent = ''; $('snapUndo').hidden = true; }
+function snapNow() {
+  if (sync || !cur || !ytReady || !lines.length) return;
+  const t = r2(nowT()); let ci = -1, ni = -1;
+  lines.forEach((l, i) => { if (l.t == null) return; if (l.t <= t) { if (ci < 0 || l.t >= lines[ci].t) ci = i; } else if (ni < 0 || l.t < lines[ni].t) ni = i; });
+  const prev = { id: cur.id, ts: lines.map(l => l.t), imp: !!cur.imp }, fresh = lines[ci + 1];
+  let tx;
+  if (fresh && fresh.t == null) { fresh.t = t; tx = '記録しました'; }
+  else {
+    const dc = ci >= 0 ? t - lines[ci].t : Infinity, dn = ni >= 0 ? lines[ni].t - t : Infinity, k = dn <= dc ? ni : ci;
+    if (k < 0) return;
+    if (ci >= 0 && Math.min(dc, dn) > SNAP_FAR) { snapSay('近くに行がありません'); return; } // 最初の行より前なら、離れていても最初の行を合わせる
+    const d = r2(t - lines[k].t), all = !!cur.imp;
+    if (Math.abs(d) < .08) { snapSay('ぴったりです'); return; }
+    lines.forEach((l, i) => { if (l.t != null && (all || i >= k)) l.t = Math.max(0, r2(l.t + d)); });
+    tx = (all ? '全体を' : 'ここから') + Math.abs(d).toFixed(1) + '秒' + (d < 0 ? '早く' : '遅く');
+  }
+  cur.imp = false; persist(); paintTimes(); tick(); snapSay(tx, prev);
+  try { if (!reduced() && $('snapBtn').animate) $('snapBtn').animate([{ transform: 'scale(.92)' }, { transform: 'none' }], { duration: 160 }); if (navigator.vibrate) navigator.vibrate(8); } catch {}
+}
+function snapUndo() {
+  const u = snapPrev;
+  if (!u || !cur || cur.id !== u.id || u.ts.length !== lines.length) { snapClear(); return; }
+  lines.forEach((l, i) => { l.t = u.ts[i]; }); cur.imp = u.imp;
+  persist(); paintTimes(); tick(); snapSay('元に戻しました');
+}
+$('snapBtn').onclick = snapNow; $('snapUndo').onclick = snapUndo;
+// マウスや指で押したボタンにフォーカスを残さない（そのあとの Enter が「いま！」として効くように）
+document.addEventListener('pointerup', e => { const b = e.target.closest && e.target.closest('main button'); if (b) setTimeout(() => b.blur(), 0); });
+
 /* ---------- 再生操作 ---------- */
 $('playBtn').onclick = () => (state === 1 || state === 3) ? pauseV() : playV();
 $('seekBar').addEventListener('input', e => { seeking = true; const k = +e.target.value / 1000; e.target.style.setProperty('--pct', (k * 100).toFixed(2) + '%'); $('tCur').textContent = fmt(k * lastDur); });
@@ -932,6 +1041,7 @@ document.addEventListener('keydown', e => {
   else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) goA();
   else if (sync && e.key === 'Backspace') { e.preventDefault(); undo(); }
   else if (e.target.tagName === 'BUTTON') return;
+  else if (e.key === 'Enter' && !sync && !(e.target.closest && e.target.closest('.row-l,#split,a,summary'))) { e.preventDefault(); if (!e.repeat) snapNow(); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); seek(nowT() - 5); }
   else if (e.key === 'ArrowRight') { e.preventDefault(); seek(nowT() + 5); }
 });
@@ -1116,6 +1226,7 @@ splitEl.addEventListener('keydown', e => {
 });
 applySizes();
 // 字幕風の帯を動画と同じ幅にそろえる
+if (window.ResizeObserver) new ResizeObserver(fitSnap).observe(document.querySelector('.lyr'));
 if (window.ResizeObserver) new ResizeObserver(es => { rootSt.setProperty('--fw', Math.round(es[0].contentRect.width) + 'px'); }).observe(document.querySelector('.frame'));
 
 /* ---------- 全画面（2行・字幕風のとき） ----------
@@ -1128,7 +1239,7 @@ let immersive = false, fsByApi = false;
 function setImmersive(on, fromBrowser) {
   on = !!on && document.body.classList.contains('compact');
   if (on === immersive) return;
-  immersive = on; document.body.classList.toggle('immersive', on); $('fsExit').hidden = !on; updateLoopUi();
+  immersive = on; document.body.classList.toggle('immersive', on); $('fsExit').hidden = !on; updateLoopUi(); fitSnap();
   if (on && !fromBrowser && fsReq && !fsNow()) {
     try { fsByApi = true; const p = fsReq.call(fsRoot); if (p && p.catch) p.catch(() => { fsByApi = false; }); } catch { fsByApi = false; }
   }
