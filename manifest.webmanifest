@@ -1,6 +1,6 @@
 {
-  "name": "弾き語りプロンプター",
-  "short_name": "弾き語り",
+  "name": "Guitar Prompter",
+  "short_name": "Guitar Prompter",
   "start_url": "./",
   "display": "browser",
   "background_color": "#08111F",
