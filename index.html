@@ -3,214 +3,274 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>弾き語りプロンプター</title>
+<title>Guitar Prompter</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#182029" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#08111F">
+<meta name="color-scheme" content="dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
 <style>
-/* layout: 1画面アプリ。左(スマホは上)=TAB譜つきYouTube動画と再生操作、右(スマホは下)=動画に同期して流れる歌詞と訳 */
+/* 見た目の方針: 音楽プレーヤーのような暗い画面。主役は大きく太い歌詞で、ほかは静かにする。
+   背景は紺の地に、左上から青、右下からミントグリーンの光。差し色もミントグリーンで、ロゴと同じ色。
+   layout: 左(スマホは上)=TAB譜つきYouTube動画と再生操作、右(スマホは下)=動画に同期して流れる歌詞と訳 */
 :root{
-  --bg:#EDF0F3; --surface:#FFFFFF; --sunk:#E1E6EB; --fg:#17212B; --muted:#5B6878; --line:#CAD2DA;
-  --mark:#B8430A; --now:#1F4FBF; --now-soft:rgba(31,79,191,.09); --on-now:#FFFFFF; --danger:#B3261E;
-  --cap-bg:#0B0D10; --cap-fg:#FFFFFF; --cap-dim:#C3CAD2; /* 字幕風の帯。動画の字幕と同じく、明るい画面でも黒地に白 */
-  --f-lyric:"Bricolage Grotesque","Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
-  --f-ui:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
-  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
-}
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#0F141A; --surface:#182029; --sunk:#0A0E13; --fg:#E7ECF1; --muted:#8E9BAA; --line:#2A3540;
-    --mark:#FF9D5C; --now:#8DB2FF; --now-soft:rgba(141,178,255,.12); --on-now:#0F141A; --danger:#FF8A80;
-    color-scheme:dark;
-  }
+  --bg:#08111F; --fg:#F3F5F8; --dim:rgba(243,245,248,.64); --faint:rgba(243,245,248,.4);
+  --glass:rgba(255,255,255,.08); --glass2:rgba(255,255,255,.15); --line:rgba(255,255,255,.14);
+  --accent:#74F2CE; --on-accent:#06221A; --accent-soft:rgba(116,242,206,.16); --danger:#FF8A80;
+  --sheet:#0F1A2B; /* ダイアログなど、背景を透かさない面 */
+  --cap-bg:#05070A; --cap-fg:#FFFFFF; --cap-dim:#C3CAD2; /* 字幕風の帯 */
+  --muted:var(--dim); --surface:var(--sheet); --sunk:#05070A; --mark:var(--accent); --now:var(--accent); --now-soft:var(--accent-soft); --on-now:var(--on-accent);
+  --f:"Figtree","Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23F3F5F8' stroke-opacity='.7' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%;margin:0}
-body{display:flex;flex-direction:column;height:100dvh;background:var(--bg);color:var(--fg);font-family:var(--f-ui);font-size:15px;line-height:1.5;overflow:hidden}
+html{overflow:hidden}
+body{display:flex;flex-direction:column;height:100dvh;background:var(--bg);color:var(--fg);font-family:var(--f);font-size:15px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased}
+#bgart{position:fixed;inset:0;z-index:-2;pointer-events:none;background:radial-gradient(70% 60% at 8% 0%,#2E6BFF 0%,rgba(46,107,255,0) 70%),radial-gradient(70% 60% at 96% 100%,#3EE6BE 0%,rgba(62,230,190,0) 70%),var(--bg)}
+body::before{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(8,14,26,.42),rgba(8,14,26,.62));pointer-events:none}
 button,select,input,textarea{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--now);outline-offset:2px}
-.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 12px;cursor:pointer;white-space:nowrap}
-.btn:hover{border-color:var(--muted)}
-.btn.primary{background:var(--now);border-color:var(--now);color:var(--on-now);font-weight:700}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.btn{border:1px solid transparent;background:var(--glass);border-radius:999px;padding:7px 14px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background-color .15s}
+.btn:hover{background:var(--glass2)}
+.btn.primary{background:var(--fg);color:var(--bg);font-weight:800}
+.btn.primary:hover{background:#FFFFFF}
 .btn.danger{color:var(--danger)}
-.btn:disabled{opacity:.45;cursor:default}
-.lbl{font-family:var(--f-mono);font-size:.68rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
-.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.btn:disabled{opacity:.4;cursor:default}
+.lbl{font-size:.78rem;color:var(--dim);white-space:nowrap}
+.mono{font-variant-numeric:tabular-nums}
+select.pill,#songSel,#rate,#viewSel{-webkit-appearance:none;appearance:none;border:1px solid transparent;border-radius:999px;background:var(--glass) var(--chev) no-repeat right 12px center/10px 7px;padding:7px 30px 7px 14px;font-weight:600;cursor:pointer;min-width:0;text-overflow:ellipsis}
+select.pill:hover,#songSel:hover,#rate:hover,#viewSel:hover{background-color:var(--glass2)}
 
-.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px;background:var(--surface);border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.04em;white-space:nowrap}
-.brand svg{width:26px;height:26px;flex:none}
-#songSel{flex:1 1 150px;min-width:0;max-width:360px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:calc(12px + env(safe-area-inset-top,0px)) 20px 8px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:.01em;white-space:nowrap}
+.brand svg{width:28px;height:28px;flex:none}
+#songSel{flex:1 1 150px;max-width:340px;font-weight:700}
 .top .sp{flex:1 1 0}
 
 main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 14px clamp(260px,var(--lw,40%),70%)}
 /* 動画と歌詞の境目。ドラッグで大きさを変える（--lw: 歌詞の幅、--vh: 動画の高さ、--ls: 2行表示の歌詞の大きさ） */
-#split{display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;background:var(--surface);border-left:1px solid var(--line);cursor:col-resize;touch-action:none;user-select:none;-webkit-user-select:none}
-#split::after{content:"";width:4px;height:44px;border-radius:2px;background:var(--line)}
-#split:hover::after,#split:focus-visible::after,body.dragging #split::after{background:var(--muted)}
+#split{display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;cursor:col-resize;touch-action:none;user-select:none;-webkit-user-select:none}
+#split::after{content:"";width:4px;height:44px;border-radius:2px;background:rgba(255,255,255,.2);transition:background-color .15s}
+#split:hover::after,#split:focus-visible::after,body.dragging #split::after{background:rgba(255,255,255,.55)}
 body.dragging .frame{pointer-events:none}
 body.dragging{user-select:none;-webkit-user-select:none}
-.video{min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;padding:14px 16px;overflow-y:auto}
-.frame{position:relative;width:100%;max-width:100%;aspect-ratio:16/9;background:var(--sunk);border-radius:10px;overflow:hidden;flex:none}
+.video{min-width:0;min-height:0;display:flex;flex-direction:column;gap:16px;padding:8px 6px 20px 20px;overflow-y:auto}
+.frame{position:relative;width:100%;max-width:100%;aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;flex:none;box-shadow:0 18px 50px rgba(0,0,0,.45)}
 .frame iframe,#player{position:absolute;inset:0;width:100%;height:100%;border:0}
-#vmsg{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:20px 24px;background:var(--sunk);color:var(--fg);overflow:auto}
-#vmsg h2{margin:0;font-size:1.15rem;text-wrap:balance}
-#vmsg ol{margin:0;padding-left:1.3em;color:var(--muted)}
-#vmsg p{margin:0;color:var(--muted)}
-.transport{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
-.grp{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
-.ic{width:38px;height:38px;padding:0;display:grid;place-items:center;border-radius:50%;font-family:var(--f-mono);font-size:.72rem}
-.ic svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-#playBtn{width:auto;height:42px;padding:0 18px 0 14px;border-radius:21px;display:flex;gap:8px;align-items:center;font-family:var(--f-ui);font-size:1rem}
-#playBtn svg{width:16px;height:16px;fill:currentColor}
-#time{font-size:.82rem;color:var(--muted);white-space:nowrap}
-#rate,#viewSel{padding:6px 6px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
-#loopTx{font-size:.78rem;color:var(--muted);white-space:nowrap}
+#vmsg{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:20px 24px;background:#0D121B;color:var(--fg);overflow:auto}
+#vmsg h2{margin:0;font-size:1.25rem;font-weight:800;text-wrap:balance}
+#vmsg ol{margin:0;padding-left:1.3em;color:var(--dim)}
+#vmsg p{margin:0;color:var(--dim)}
+
+/* 再生まわり: 曲名 → 再生位置のバー → 再生ボタン → （速さ・表示・くり返し） */
+.transport{display:flex;flex-direction:column;gap:10px;min-width:0}
+.np{display:flex;align-items:center;gap:12px;min-width:0}
+#art{width:46px;height:46px;border-radius:8px;object-fit:cover;flex:none;background:var(--glass)}
+.npTx{min-width:0}
+#npTitle{font-weight:800;font-size:1.3rem;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#npArtist{font-size:.9rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#npArtist:empty{display:none}
+.scrub{display:flex;align-items:center;gap:10px;min-width:0}
+.scrub .mono{font-size:.72rem;color:var(--dim);min-width:2.5em}
+#tDur{text-align:right}
+#seekBar{-webkit-appearance:none;appearance:none;flex:1;min-width:0;height:20px;margin:0;background:transparent;cursor:pointer;--pct:0%;--la:0%;--lb:0%}
+#seekBar::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,transparent var(--la),var(--accent) var(--la),var(--accent) var(--lb),transparent var(--lb)) 0 0/100% 100%,linear-gradient(to right,var(--fg) var(--pct),rgba(255,255,255,.22) var(--pct))}
+#seekBar::-moz-range-track{height:4px;border-radius:2px;background:linear-gradient(to right,transparent var(--la),var(--accent) var(--la),var(--accent) var(--lb),transparent var(--lb)) 0 0/100% 100%,linear-gradient(to right,var(--fg) var(--pct),rgba(255,255,255,.22) var(--pct))}
+#seekBar::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-4px;border-radius:50%;background:var(--fg);opacity:0;transition:opacity .15s}
+#seekBar::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:var(--fg)}
+#seekBar:hover::-webkit-slider-thumb,#seekBar:active::-webkit-slider-thumb,#seekBar:focus-visible::-webkit-slider-thumb{opacity:1}
+@media (hover:none){#seekBar::-webkit-slider-thumb{opacity:1}}
+#seekBar:disabled{opacity:.4;cursor:default}
+.grp{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.grp.main{display:grid;grid-template-columns:44px 44px 60px 44px 44px;justify-content:center;align-items:center;gap:10px}
+#aGo{grid-column:1}#backBtn{grid-column:2}#playBtn{grid-column:3}#fwdBtn{grid-column:4}#moreBtn{grid-column:5}
+.ic{width:40px;height:40px;padding:0;display:grid;place-items:center;border-radius:50%;font-size:.82rem;font-weight:800;font-variant-numeric:tabular-nums}
+.ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.grp.main .ic{width:44px;height:44px;background:transparent}
+.grp.main .ic:hover{background:var(--glass)}
+#moreBtn[aria-expanded="true"]{background:var(--glass2)}
+#playBtn{width:60px;height:60px;padding:0;border-radius:50%;display:grid;place-items:center;transition:transform .12s,background-color .15s}
+#playBtn:active{transform:scale(.94)}
+#playBtn svg{width:24px;height:24px;fill:currentColor}
+.transport .grp.spd,.transport .grp.loop{display:none;justify-content:center}
+body.more .transport .grp.spd,body.more .transport .grp.loop{display:flex}
+#rate,#viewSel{font-size:.88rem}
+#loopTx{font-size:.78rem;color:var(--dim);white-space:nowrap}
 /* 前に作った「ここから〜ここまで」。押すとその区間をくり返す */
-#loops{display:flex;flex-wrap:wrap;gap:6px;flex-basis:100%}
-.lp{display:inline-flex;align-items:stretch;max-width:100%;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
-.lp .btn{border:0;border-radius:0;padding:5px 9px;font-size:.82rem;min-width:0;max-width:17em;overflow:hidden;text-overflow:ellipsis}
-.lp .btn[aria-pressed="true"]{background:var(--now-soft);color:var(--now);font-weight:700}
-.lpDel{border:0;border-left:1px solid var(--line);background:transparent;color:var(--muted);padding:0 9px;cursor:pointer;font-size:1rem;line-height:1}
+#loops{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;flex-basis:100%}
+.lp{display:inline-flex;align-items:stretch;max-width:100%;border-radius:999px;overflow:hidden;background:var(--glass)}
+.lp .btn{border:0;border-radius:0;background:transparent;padding:6px 6px 6px 13px;font-size:.82rem;min-width:0;max-width:17em;overflow:hidden;text-overflow:ellipsis}
+.lp .btn:hover{background:var(--glass)}
+.lp .btn[aria-pressed="true"]{color:var(--accent);font-weight:800}
+.lpDel{border:0;background:transparent;color:var(--faint);padding:0 11px 0 6px;cursor:pointer;font-size:1rem;line-height:1}
 .lpDel:hover{color:var(--danger)}
-.syncbar{display:flex;flex-direction:column;gap:10px;padding:12px 14px;border:1px solid var(--now);border-radius:10px;background:var(--now-soft)}
-.syncbar p{margin:0;font-size:.88rem}
+
+/* タイミング合わせ */
+.syncbar{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line);border-radius:16px;background:rgba(10,14,21,.55)}
+.syncbar p{margin:0;font-size:.88rem;color:var(--dim)}
 .syncbar .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-#tapBtn{flex:1 1 110px;min-height:56px;font-size:1.1rem;border-radius:12px}
-.modes .btn{flex:1 1 auto;padding:5px 8px;font-size:.85rem}
-.modes .btn[aria-pressed="true"]{background:var(--now);border-color:var(--now);color:var(--on-now);font-weight:700}
+#tapBtn{flex:1 1 110px;min-height:56px;font-size:1.1rem;border-radius:14px;background:var(--accent);color:var(--on-accent)}
+.modes .btn{flex:1 1 auto;padding:6px 8px;font-size:.85rem}
+.modes .btn[aria-pressed="true"]{background:var(--fg);color:var(--bg);font-weight:800}
 .shift .btn{flex:1 1 auto;padding:6px 8px;font-size:.85rem}
-#syncMsg,#offTx{font-size:.8rem;color:var(--muted)}
+#syncMsg,#offTx{font-size:.8rem;color:var(--dim)}
 #syncMsg:empty{display:none}
 .syncbar details{margin:0}
 .syncbar details .row{margin-top:8px}
 
-.lyr{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--surface)}
-.ltool{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 16px;border-bottom:1px solid var(--line)}
-.ltool label{display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
-.ltool input{accent-color:var(--now);width:16px;height:16px;margin:0}
-#stat{font-size:.78rem;color:var(--muted)}
-#list{position:relative;flex:1;min-height:0;overflow-y:auto;padding-block:12px 40vh;padding-inline:10px;display:flex;flex-direction:column;gap:2px}
-.row-l{display:grid;grid-template-columns:3.4em minmax(0,1fr);gap:8px;align-items:baseline;padding:8px 8px;border-radius:9px;cursor:pointer;opacity:.5;transition:opacity .2s,background-color .2s;border:1px dashed transparent}
-.row-l:hover{opacity:.8}
-.row-l.on{opacity:1;background:var(--now-soft)}
-.row-l.cursor{opacity:1;border-color:var(--mark)}
-.ts{font-family:var(--f-mono);font-size:.68rem;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
-.row-l.cursor .ts{color:var(--mark);font-weight:700}
-.en{font-family:var(--f-lyric);font-weight:700;font-size:clamp(1.1rem,.95rem + .7vw,1.55rem);line-height:1.3;overflow-wrap:anywhere}
-.row-l.on .en{color:var(--now)}
-.tr{margin-top:3px;font-size:clamp(.85rem,.8rem + .25vw,1rem);color:var(--muted)}
-.row-l.on .tr{color:var(--fg)}
+/* 歌詞: いまの行だけ明るく、ほかは沈める */
+.lyr{min-width:0;min-height:0;display:flex;flex-direction:column}
+.ltool{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 20px 4px 14px}
+.ltool label{display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;font-size:.88rem;color:var(--dim)}
+.ltool input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+#stat{font-size:.78rem;color:var(--faint)}
+#list{position:relative;flex:1;min-height:0;overflow-y:auto;padding-block:16px 45vh;padding-inline:14px 20px;display:flex;flex-direction:column;gap:10px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 34px,#000 calc(100% - 90px),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 34px,#000 calc(100% - 90px),transparent 100%)}
+.row-l{display:block;padding:2px 0;cursor:pointer;opacity:.32;transition:opacity .35s}
+.row-l:hover{opacity:.62}
+.row-l.on{opacity:1}
+.row-l.cursor{opacity:1;outline:2px dashed var(--accent);outline-offset:5px;border-radius:6px}
+.ts{display:none;font-size:.72rem;color:var(--dim);font-variant-numeric:tabular-nums;text-align:right}
+body.syncing .row-l{display:grid;grid-template-columns:3em minmax(0,1fr);gap:10px;align-items:baseline}
+body.syncing .ts{display:block}
+body.syncing .en{font-size:clamp(1.05rem,.95rem + .5vw,1.35rem)}
+.row-l.cursor .ts{color:var(--accent);font-weight:800}
+.en{font-weight:800;font-size:clamp(1.45rem,1.05rem + 1.5vw,2.25rem);line-height:1.24;letter-spacing:-.005em;overflow-wrap:anywhere}
+.tr{margin-top:5px;font-weight:500;font-size:clamp(.92rem,.84rem + .35vw,1.12rem);line-height:1.45;opacity:.82}
 body.no-tr .tr{display:none}
-.head{margin:16px 8px 2px;font-family:var(--f-mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.gap{height:12px;flex:none}
-.hint{margin:8vh 12px 0;color:var(--muted)}
+.head{margin:18px 0 0;font-size:.8rem;font-weight:700;color:var(--faint)}
+.gap{height:14px;flex:none}
+.hint{margin:8vh 0 0;color:var(--dim);font-size:1rem}
+.nudge{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:10px 20px 0 14px;padding:12px 14px;border-radius:14px;background:var(--accent-soft);font-size:.88rem;text-align:left}
+.nudge>span:first-child{flex:1 1 200px;min-width:0}
 
-dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--fg);width:min(760px,calc(100vw - 32px));max-height:calc(100% - 32px);padding:20px}
-dialog::backdrop{background:rgba(8,12,18,.55)}
-dialog h2{margin:0 0 14px;font-size:1.15rem}
+/* 曲の追加・編集、バックアップ */
+dialog{border:1px solid var(--line);border-radius:20px;background:var(--sheet);color:var(--fg);width:min(760px,calc(100vw - 32px));max-height:calc(100% - 32px);padding:20px;box-shadow:0 30px 90px rgba(0,0,0,.6)}
+dialog::backdrop{background:rgba(4,6,10,.66)}
+dialog h2{margin:0 0 14px;font-size:1.3rem;font-weight:800}
 .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
 .fields .wide{grid-column:1/-1}
-.fld{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);min-width:0}
-.fld input,#edText,#trPaste{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:7px 9px;color:var(--fg);min-width:0;width:100%;font-size:.95rem}
-#edText{font-family:var(--f-mono);font-size:.84rem;line-height:1.6;min-height:26vh;resize:vertical;margin-top:8px}
-.step{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
-.step h3{margin:0 0 10px;font-size:.95rem;display:flex;align-items:center;gap:8px}
-.step .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--now);color:var(--on-now);font-family:var(--f-mono);font-size:.75rem}
+.fld{display:flex;flex-direction:column;gap:5px;font-size:.8rem;color:var(--dim);min-width:0}
+.fld input,#edText,#trPaste{border:1px solid transparent;border-radius:10px;background:rgba(255,255,255,.07);padding:9px 11px;color:var(--fg);min-width:0;width:100%;font-size:.95rem}
+.fld input:focus-visible,#edText:focus-visible,#trPaste:focus-visible{outline:0;border-color:var(--accent)}
+#edText{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.84rem;line-height:1.6;min-height:26vh;resize:vertical;margin-top:8px}
+.step{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
+.step h3{margin:0 0 10px;font-size:1rem;font-weight:800;display:flex;align-items:center;gap:8px}
+.step .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--fg);color:var(--bg);font-size:.78rem;font-weight:800}
 .step .fields{margin-bottom:0}
 .step .note{margin:0 0 8px}
 .step .acts .note{margin:0}
 #findMsg:empty,#trMsg:empty,#edMsg:empty{display:none}
-.foot{position:sticky;bottom:-20px;margin:14px -20px -20px;padding:12px 20px;background:var(--surface);border-top:1px solid var(--line)}
-.nudge{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:10px 12px 0;padding:10px 12px;border-radius:10px;background:var(--now-soft);font-size:.85rem;text-align:left}
-.nudge>span:first-child{flex:1 1 200px;min-width:0}
+.foot{position:sticky;bottom:-20px;margin:14px -20px -20px;padding:12px 20px;background:var(--sheet);border-top:1px solid var(--line)}
 #trPaste{font-size:.88rem;line-height:1.6;min-height:16vh;resize:vertical}
 a.btn{display:inline-block;text-decoration:none}
-.note{margin:8px 0;font-size:.82rem;color:var(--muted)}
+.note{margin:8px 0;font-size:.82rem;color:var(--dim)}
 details{margin:10px 0;font-size:.85rem}
-summary{cursor:pointer;color:var(--muted)}
-pre.fmt{margin:8px 0 0;overflow-x:auto;background:var(--sunk);border-radius:8px;padding:12px 14px;font-family:var(--f-mono);font-size:.78rem;line-height:1.7}
-pre.fmt i{font-style:normal;color:var(--muted)}
+summary{cursor:pointer;color:var(--dim)}
+pre.fmt{margin:8px 0 0;overflow-x:auto;background:rgba(0,0,0,.3);border-radius:10px;padding:12px 14px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.78rem;line-height:1.7}
+pre.fmt i{font-style:normal;color:var(--faint)}
 #found{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.hit{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
-.hit .nm{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
-.hit small{color:var(--muted)}
-.msg{min-height:1.4em;font-size:.82rem;color:var(--muted);margin:8px 0}
+.hit{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:10px 12px;border-radius:12px;background:var(--glass)}
+.hit .nm{flex:1 1 220px;min-width:0;overflow-wrap:anywhere;font-weight:600}
+.hit small{color:var(--dim);font-weight:500}
+.msg{min-height:1.4em;font-size:.82rem;color:var(--dim);margin:8px 0}
 .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .acts .sp{flex:1}
 
-/* 2行表示: 動画を最大にして、歌詞は「いまの行」と「次の行」だけにする */
-body.compact main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto minmax(0,1fr);grid-template-areas:"v" "s" "l" "t" "."}
-body.compact #split{grid-area:s;height:18px;background:transparent;border:0;cursor:row-resize}
+/* パソコンの一覧表示: 速さ・表示・くり返しは常に出す。動画がすぐ上にあるのでサムネイルは出さない */
+@media (min-width:821px){
+  body:not(.compact) .transport .grp.spd,body:not(.compact) .transport .grp.loop{display:flex}
+  body:not(.compact) #moreBtn,body:not(.compact) #art{display:none}
+}
+
+/* 2行表示: 動画を最大にして、歌詞は「いまの行」と「次の行」だけにする。再生まわりは画面の下に寄せる */
+body.compact main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"v" "s" "l" "t"}
+body.compact #split{grid-area:s;height:18px;cursor:row-resize}
 body.compact #split::after{width:44px;height:4px}
 body.compact .frame{width:100%}
 body.compact .video{display:contents}
-body.compact .vwrap{grid-area:v;min-width:0;min-height:0;padding:10px 16px 0}
-body.compact .transport{grid-area:t;padding:10px 16px;justify-content:center}
+body.compact .vwrap{grid-area:v;min-width:0;min-height:0;padding:6px 16px 0}
+body.compact .transport{grid-area:t;padding:10px 20px calc(14px + env(safe-area-inset-bottom,0px))}
+body.compact #npTitle{font-size:1.05rem}
+body.compact #npArtist{font-size:.82rem}
 body.compact .syncbar{display:none}
-body.compact .lyr{grid-area:l;border:0;background:transparent;min-height:0}
+body.compact .lyr{grid-area:l;min-height:0;justify-content:center;overflow:hidden}
 body.compact .ltool{display:none}
-body.compact #list{flex:none;overflow:hidden;padding-block:2px 0;padding-inline:16px;min-height:calc(5.8rem * var(--ls,1));gap:4px;text-align:center}
-body.compact .row-l.on .tr{font-size:calc(clamp(.85rem,.8rem + .25vw,1rem) * var(--ls,1))}
+body.compact #list{flex:none;overflow:hidden;padding-block:2px 0;padding-inline:20px;min-height:calc(6.4rem * var(--ls,1));gap:8px;text-align:center;-webkit-mask-image:none;mask-image:none}
 body.compact .row-l,body.compact .head,body.compact .gap{display:none}
-body.compact .row-l.on,body.compact .row-l.next{display:block;padding:0;border:0;background:none}
-body.compact .row-l .ts{display:none}
+body.compact .row-l.on,body.compact .row-l.next{display:block;padding:0}
 body.compact .row-l.on{opacity:1}
-body.compact .row-l.on .en{font-size:calc(clamp(1.25rem,1rem + 1.2vw,1.9rem) * var(--ls,1))}
-body.compact .row-l.next{opacity:.5}
-body.compact .row-l.next .en{font-size:calc(clamp(.95rem,.85rem + .5vw,1.2rem) * var(--ls,1))}
+body.compact .row-l.on .en{font-size:calc(clamp(1.7rem,1rem + 3.2vw,2.5rem) * var(--ls,1))}
+body.compact .row-l.on .tr{font-size:calc(clamp(.92rem,.84rem + .35vw,1.12rem) * var(--ls,1))}
+body.compact .row-l.next{opacity:.38}
+body.compact .row-l.next .en{font-size:calc(clamp(1.1rem,.9rem + 1vw,1.4rem) * var(--ls,1))}
 body.compact .row-l.next .tr{display:none}
+body.compact .nudge{margin:8px 20px 0}
 @media (orientation:landscape){
   body.compact main{grid-template-rows:minmax(0,1fr) auto auto auto;grid-template-areas:"v" "s" "l" "t"}
   body.compact .vwrap{container-type:size;display:flex;align-items:center;justify-content:center}
   body.compact .frame{width:min(100cqw,calc(100cqh * 16 / 9))}
 }
+/* パソコンの2行・字幕風: 下のバーを「曲名 / 再生 / 設定」の3列にする */
+@media (orientation:landscape) and (min-height:521px){
+  body.compact .transport{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,540px) minmax(0,1fr);grid-template-areas:"np main opt" "np scrub opt" "loop loop loop";align-items:center;gap:2px 24px;padding:8px 20px 12px}
+  body.compact .np{grid-area:np}
+  body.compact .scrub{grid-area:scrub}
+  body.compact .grp.main{grid-area:main}
+  body.compact .transport .grp.spd{grid-area:opt;display:flex;justify-content:flex-end}
+  body.compact .transport .grp.loop{grid-area:loop;padding-top:8px}
+}
+/* スマホ横向きの2行・字幕風: 歌詞の横に最小限の操作だけを並べる */
 @media (orientation:landscape) and (max-height:520px){
   body.compact .top{display:none}
   body.compact main{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:minmax(0,1fr) auto auto;grid-template-areas:"v v" "s s" "l t"}
   body.compact #split{height:14px}
   body.compact .vwrap{padding:calc(6px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
-  body.compact .transport{padding:6px max(16px,env(safe-area-inset-right,0px)) 6px 8px;flex-wrap:nowrap;align-self:center}
+  body.compact .transport{flex-direction:row;flex-wrap:nowrap;align-items:center;align-self:center;gap:8px;padding:6px max(16px,env(safe-area-inset-right,0px)) 6px 8px}
+  body.compact .np,body.compact .scrub,body.compact #moreBtn,body.compact .transport .grp.loop,body.compact .grp.spd .lbl{display:none}
   body.compact .transport .grp{flex-wrap:nowrap}
-  body.compact #time,body.compact .grp.loop,body.compact #playTx,body.compact .grp.spd .lbl{display:none}
-  body.compact #playBtn{padding:0 13px}
-  body.compact #list{min-height:0;height:calc(4.6rem * var(--ls,1));padding-block:0 6px;padding-inline:max(16px,env(safe-area-inset-left,0px)) 8px;justify-content:center;text-align:left;gap:2px}
+  body.compact .transport .grp.spd{display:flex}
+  body.compact .grp.main{grid-template-columns:auto auto 48px auto;gap:4px}
+  body.compact #aGo,body.compact #backBtn,body.compact #playBtn,body.compact #fwdBtn{grid-column:auto}
+  body.compact .grp.main .ic{width:38px;height:38px}
+  body.compact #playBtn{width:48px;height:48px}
+  body.compact #playBtn svg{width:20px;height:20px}
+  body.compact #list{min-height:0;height:calc(4.8rem * var(--ls,1));padding-block:0 6px;padding-inline:max(16px,env(safe-area-inset-left,0px)) 8px;justify-content:center;text-align:left;gap:2px}
   body.compact .row-l .en,body.compact .row-l .tr{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  body.compact .row-l.on .en{font-size:calc(1.15rem * var(--ls,1))}
+  body.compact .row-l.on .en{font-size:calc(1.25rem * var(--ls,1))}
   body.compact .row-l.on .tr{font-size:calc(.8rem * var(--ls,1));margin-top:0}
   body.compact .row-l.next .en{font-size:calc(.85rem * var(--ls,1))}
 }
 /* 字幕風: 動画のすぐ下に、動画と同じ幅の黒い帯で「いまの行」だけを出す（プレーヤーの上には重ねない） */
-body.sub main{grid-template-areas:"v" "l" "s" "t" "."}
-body.sub .frame{border-radius:10px 10px 0 0}
-body.sub .lyr{justify-self:center;width:var(--fw,100%);max-width:100%;background:var(--cap-bg);border-radius:0 0 10px 10px}
+body.sub main{grid-template-rows:auto auto auto minmax(0,1fr) auto;grid-template-areas:"v" "l" "s" "." "t"}
+body.sub .frame{border-radius:14px 14px 0 0}
+body.sub .lyr{justify-self:center;width:var(--fw,100%);max-width:100%;background:var(--cap-bg);border-radius:0 0 14px 14px}
 body.sub #list{min-height:calc(4.4rem * var(--ls,1));padding-block:8px;justify-content:center}
 body.sub .row-l.next{display:none}
 body.sub .row-l.on .en{color:var(--cap-fg)}
-body.sub .row-l.on .tr{color:var(--cap-dim)}
+body.sub .row-l.on .tr{color:var(--cap-dim);opacity:1}
 body.sub .nudge{background:transparent;color:var(--cap-fg);margin:4px 8px 0}
 @media (orientation:landscape){
-  body.sub main{grid-template-areas:"v" "l" "s" "t"}
+  body.sub main{grid-template-rows:minmax(0,1fr) auto auto auto;grid-template-areas:"v" "l" "s" "t"}
   body.sub .vwrap{align-items:flex-end}
 }
 @media (orientation:landscape) and (max-height:520px){
-  body.sub main{grid-template-areas:"v v" "l l" "s t"}
+  body.sub main{grid-template-rows:minmax(0,1fr) auto auto;grid-template-areas:"v v" "l l" "s t"}
   body.sub #list{height:auto;min-height:calc(3.2rem * var(--ls,1));padding-block:5px;padding-inline:12px;text-align:center}
 }
 
-/* 全画面（2行・字幕風のとき）: 上のバーと下の操作を隠して動画を最大にする。配色は暗い側に固定する */
-body.immersive{--bg:#0B0D10;--surface:#12161B;--sunk:#000000;--fg:#E7ECF1;--muted:#8E9BAA;--line:#2A3540;--mark:#FF9D5C;--now:#8DB2FF;--now-soft:rgba(141,178,255,.12);--on-now:#0F141A;color-scheme:dark}
+/* 全画面（2行・字幕風のとき）: 上のバーと下の操作を隠して動画を最大にする */
 body.immersive .top,body.immersive .transport,body.immersive #split{display:none}
 body.immersive.compact main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"v" "l" "."}
 body.immersive .vwrap{padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) 0 env(safe-area-inset-left,0px)}
-body.immersive .frame{border-radius:0}
+body.immersive .frame{border-radius:0;box-shadow:none}
 body.immersive .lyr{position:relative;border-radius:0}
 body.immersive.compact #list{text-align:center;padding-inline:52px;padding-block:6px calc(6px + env(safe-area-inset-bottom,0px))}
 #fsExit,#fsBack{position:absolute;z-index:2;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));width:34px;height:34px;opacity:.55}
@@ -222,30 +282,35 @@ body.immersive.compact #list{text-align:center;padding-inline:52px;padding-block
 
 @media (max-width:820px){
   main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 18px minmax(0,1fr)}
-  .video{padding:8px 16px 10px;gap:8px;overflow:visible}
+  .video{padding:4px 16px 6px;gap:8px;overflow:visible}
   .vwrap{display:flex;justify-content:center}
   .frame{width:min(100%,calc(var(--vh,100vh) * 16 / 9))}
   @media (orientation:landscape){ .frame{width:min(100%,calc(var(--vh,max(200px,55vh)) * 16 / 9))} }
-  #split{border-left:0;border-top:1px solid var(--line);cursor:row-resize}
+  #split{cursor:row-resize}
   #split::after{width:44px;height:4px}
+  body:not(.compact) .np{display:none}
   .brand,.top .sp{display:none}
-  .top{gap:6px}
-  .top .btn{padding:5px 9px;font-size:.85rem}
+  .top{gap:6px;padding:calc(8px + env(safe-area-inset-top,0px)) 16px 6px}
+  .top .btn{padding:6px 11px;font-size:.85rem}
   #songSel{flex:1 1 90px}
+  .ltool{padding:4px 16px 2px}
+  #list{padding-inline:16px}
+  .nudge{margin:8px 16px 0}
   body.syncing #transport{display:none}
-  .syncbar{padding:10px 12px;gap:8px}
+  .syncbar{padding:12px;gap:8px}
   .syncbar p{font-size:.8rem}
   #tapBtn{min-height:52px}
-  .syncbar .row .btn:not(#tapBtn){padding:6px 8px;font-size:.85rem}
+  .syncbar .row .btn:not(#tapBtn){padding:6px 9px;font-size:.85rem}
   .fields{grid-template-columns:minmax(0,1fr)}
 }
-@media (prefers-reduced-motion:reduce){.row-l{transition:none}}
+@media (prefers-reduced-motion:reduce){.row-l,#playBtn,.btn{transition:none}}
 </style>
 </head>
 <body>
+<div id="bgart" aria-hidden="true"></div>
 
 <header class="top">
-  <span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0B111B"/><circle cx="32" cy="32" r="18.5" fill="none" stroke="#E7ECF1" stroke-width="5"/><path d="M23 23h18M23 41h18" fill="none" stroke="#E7ECF1" stroke-width="5" stroke-linecap="round"/><path d="M21 32h22" fill="none" stroke="#FF9D5C" stroke-width="5" stroke-linecap="round"/></svg>弾き語りプロンプター</span>
+  <span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0B111B"/><circle cx="32" cy="32" r="18.5" fill="none" stroke="#E7ECF1" stroke-width="5"/><path d="M23 23h18M23 41h18" fill="none" stroke="#E7ECF1" stroke-width="5" stroke-linecap="round"/><path d="M21 32h22" fill="none" stroke="#74F2CE" stroke-width="5" stroke-linecap="round"/></svg>Guitar Prompter</span>
   <select id="songSel" aria-label="曲を選ぶ"></select>
   <span class="sp"></span>
   <button class="btn" id="editBtn" type="button">編集</button>
@@ -262,12 +327,21 @@ body.immersive.compact #list{text-align:center;padding-inline:52px;padding-block
       </div>
     </div>
     <div class="transport" id="transport">
-      <div class="grp">
-        <button class="btn ic" id="backBtn" type="button" aria-label="5秒戻る" title="5秒戻る（←）">−5</button>
-        <button class="btn primary" id="playBtn" type="button"><svg id="playIc" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20"/></svg><span id="playTx">再生</span></button>
-        <button class="btn ic" id="fwdBtn" type="button" aria-label="5秒進む" title="5秒進む（→）">+5</button>
+      <div class="np">
+        <img id="art" alt="" hidden>
+        <div class="npTx"><div id="npTitle"></div><div id="npArtist"></div></div>
+      </div>
+      <div class="scrub">
+        <span id="tCur" class="mono">0:00</span>
+        <input id="seekBar" type="range" min="0" max="1000" step="1" value="0" aria-label="再生位置">
+        <span id="tDur" class="mono">0:00</span>
+      </div>
+      <div class="grp main">
         <button class="btn ic" id="aGo" type="button" hidden aria-label="「ここから」の位置に戻る" title="「ここから」の位置に戻る（R）"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
-        <span id="time" class="mono">0:00 / 0:00</span>
+        <button class="btn ic" id="backBtn" type="button" aria-label="5秒戻る" title="5秒戻る（←）">−5</button>
+        <button class="btn primary" id="playBtn" type="button" aria-label="再生" title="再生・停止（スペース）"><svg id="playIc" viewBox="0 0 24 24" aria-hidden="true"><polygon points="7,4 21,12 7,20"/></svg><span id="playTx" class="sr">再生</span></button>
+        <button class="btn ic" id="fwdBtn" type="button" aria-label="5秒進む" title="5秒進む（→）">+5</button>
+        <button class="btn ic" id="moreBtn" type="button" aria-label="速さ・表示・くり返し" aria-expanded="false" title="速さ・表示・くり返し"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></svg></button>
       </div>
       <div class="grp spd">
         <label class="lbl" for="rate">速さ</label>
@@ -520,9 +594,9 @@ const playV = () => { if (ytReady) { try { yt.playVideo(); } catch {} } };
 const pauseV = () => { if (ytReady) { try { yt.pauseVideo(); } catch {} } };
 function setPlayUi() {
   const on = state === 1 || state === 3;
-  $('playTx').textContent = on ? '停止' : '再生';
-  $('playIc').innerHTML = on ? '<rect x="5" y="4" width="5" height="16"/><rect x="14" y="4" width="5" height="16"/>' : '<polygon points="6,4 20,12 6,20"/>';
-  ['playBtn', 'backBtn', 'fwdBtn', 'rate', 'aBtn', 'bBtn', 'abClr', 'aGo', 'fsBack'].forEach(id => { $(id).disabled = !ytReady || !cur; });
+  $('playTx').textContent = on ? '停止' : '再生'; $('playBtn').setAttribute('aria-label', on ? '停止' : '再生');
+  $('playIc').innerHTML = on ? '<rect x="5" y="4" width="5" height="16" rx="1"/><rect x="14" y="4" width="5" height="16" rx="1"/>' : '<polygon points="7,4 21,12 7,20"/>';
+  ['playBtn', 'backBtn', 'fwdBtn', 'rate', 'aBtn', 'bBtn', 'abClr', 'aGo', 'fsBack', 'seekBar'].forEach(id => { $(id).disabled = !ytReady || !cur; });
   $('syncBtn').disabled = $('nudgeGo').disabled = !ytReady || !cur || !lines.length;
 }
 
@@ -590,8 +664,14 @@ function applyCompact() { // タイミング合わせ中は一覧が必要なの
   $('fsBtn').hidden = !on; if (!on) setImmersive(false); // 一覧表示やタイミング合わせでは全画面を解く
 }
 function scrollToLine(el) { const box = $('list'); box.scrollTo({ top: Math.max(0, el.offsetTop - box.clientHeight * .3), behavior: reduced() ? 'auto' : 'smooth' }); }
+let lastDur = 0, seeking = false;
+function loopBand() { // 再生位置のバーに、くり返しの区間をオレンジで重ねる
+  const a = cur && cur.a, b = cur && cur.b, ok = lastDur > 0 && a != null && b != null && b > a, st = $('seekBar').style;
+  st.setProperty('--la', ok ? (clamp(a / lastDur, 0, 1) * 100).toFixed(2) + '%' : '0%');
+  st.setProperty('--lb', ok ? (clamp(b / lastDur, 0, 1) * 100).toFixed(2) + '%' : '0%');
+}
 function updateLoopUi() {
-  const a = cur && cur.a, b = cur && cur.b;
+  const a = cur && cur.a, b = cur && cur.b; loopBand();
   $('loopTx').textContent = a == null ? '' : fmt(a) + ' → ' + (b == null ? '…' : fmt(b));
   $('aGo').hidden = a == null; $('fsBack').hidden = a == null || !immersive;
   const box = $('loops'); box.innerHTML = '';
@@ -621,6 +701,10 @@ function load(song) {
   blocks = song ? parseText(song.text) : [];
   $('songSel').value = song ? song.id : ''; $('editBtn').disabled = !song;
   renderList(); updateLoopUi();
+  $('npTitle').textContent = song ? (song.title || '無題') : '曲を追加してください'; $('npArtist').textContent = song ? (song.artist || '') : '';
+  const thumb = song && song.vid ? 'https://i.ytimg.com/vi/' + song.vid + '/mqdefault.jpg' : ''; // 動画のサムネイルを曲名の横に出す
+  $('art').hidden = !thumb; if (thumb) $('art').src = thumb; else $('art').removeAttribute('src');
+  $('tCur').textContent = '0:00'; $('seekBar').value = '0'; $('seekBar').style.setProperty('--pct', '0%');
   if (!song) {
     pauseV(); wantVid = '';
     vmsg('<h2>TAB譜つきの演奏動画に、歌詞と訳を合わせて流します</h2><ol><li>「曲を追加」でYouTubeのURLを貼る</li><li>英語の歌詞と訳を入れる（検索して取り込むこともできます）</li><li>動画を流しながら、行の歌い出しでキーを押してタイミングを記録する</li></ol>');
@@ -635,7 +719,8 @@ function tick() {
   if (!cur || !ytReady) return;
   const t = nowT();
   let dur = 0; try { dur = yt.getDuration() || 0; } catch {}
-  $('time').textContent = fmt(t) + ' / ' + fmt(dur);
+  if (dur !== lastDur) { lastDur = dur; $('tDur').textContent = fmt(dur); loopBand(); }
+  if (!seeking) { $('tCur').textContent = fmt(t); const k = dur > 0 ? clamp(t / dur, 0, 1) : 0; $('seekBar').value = String(Math.round(k * 1000)); $('seekBar').style.setProperty('--pct', (k * 100).toFixed(2) + '%'); }
   if (state === 1 && cur.a != null && cur.b != null && cur.b > cur.a && t >= cur.b) { seek(cur.a); return; }
   let li = -1;
   for (let i = 0; i < lines.length; i++) { const lt = lines[i].t; if (lt != null && lt <= t + .05 && (li < 0 || lt >= lines[li].t)) li = i; }
@@ -783,6 +868,12 @@ $('clrT').onclick = () => {
 
 /* ---------- 再生操作 ---------- */
 $('playBtn').onclick = () => (state === 1 || state === 3) ? pauseV() : playV();
+$('seekBar').addEventListener('input', e => { seeking = true; const k = +e.target.value / 1000; e.target.style.setProperty('--pct', (k * 100).toFixed(2) + '%'); $('tCur').textContent = fmt(k * lastDur); });
+$('seekBar').addEventListener('change', e => { if (lastDur > 0) seek(+e.target.value / 1000 * lastDur); seeking = false; });
+$('seekBar').addEventListener('pointerup', e => e.target.blur()); // 離したあともスペースで再生・停止できるように
+function setMore(on) { opt.more = !!on; saveOpt(); document.body.classList.toggle('more', opt.more); $('moreBtn').setAttribute('aria-expanded', String(opt.more)); }
+$('moreBtn').onclick = () => setMore(!opt.more);
+setMore(opt.more);
 $('backBtn').onclick = () => seek(nowT() - 5);
 $('fwdBtn').onclick = () => seek(nowT() + 5);
 $('rate').onchange = e => { const v = +e.target.value || 1; rate = v; lastRaw = -1; try { yt.setPlaybackRate(v); } catch {} if (cur) { cur.speed = v; saveSongs(); } };
